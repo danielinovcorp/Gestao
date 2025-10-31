@@ -1,0 +1,34 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+	public function up(): void
+	{
+		if (Schema::hasTable('proposta_linhas')) {
+			return;
+		}
+
+		Schema::create('proposta_linhas', function (Blueprint $table) {
+			$table->id();
+			$table->foreignId('proposta_id')->constrained('propostas')->cascadeOnDelete();
+			$table->foreignId('artigo_id')->constrained('artigos')->cascadeOnUpdate();
+			$table->foreignId('fornecedor_id')->nullable()->constrained('entidades')->cascadeOnUpdate();
+			$table->string('descricao')->nullable();
+			$table->string('referencia')->nullable();
+			$table->decimal('quantidade', 12, 3);
+			$table->decimal('preco_unitario', 12, 2);
+			$table->decimal('preco_custo', 12, 2)->nullable();
+			$table->decimal('subtotal', 12, 2);
+			$table->timestamps();
+		});
+	}
+
+
+	public function down(): void
+	{
+		Schema::dropIfExists('proposta_linhas');
+	}
+};
