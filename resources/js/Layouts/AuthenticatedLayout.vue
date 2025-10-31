@@ -119,7 +119,7 @@ watch(flash, (f) => {
                                             class="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition pt-2"
                                         >
                                             <div
-                                                class="min-w-64 rounded-xl border bg-white shadow-lg p-2"
+                                                class="min-w-64 rounded-xl border bg-white shadow-lg p-2 flex flex-col gap-1"
                                                 role="menu"
                                             >
                                                 <NavLink
@@ -136,7 +136,7 @@ watch(flash, (f) => {
                                                     "
                                                     role="menuitem"
                                                 >
-                                                    Encomendas – Clientes
+                                                    Clientes
                                                 </NavLink>
                                                 <NavLink
                                                     class="block px-3 py-2 rounded hover:bg-slate-50"
@@ -152,7 +152,7 @@ watch(flash, (f) => {
                                                     "
                                                     role="menuitem"
                                                 >
-                                                    Encomendas – Fornecedores
+                                                    Fornecedores
                                                 </NavLink>
                                             </div>
                                         </div>
@@ -249,130 +249,257 @@ watch(flash, (f) => {
                                     Calendário
                                 </NavLink>
 
-                                <!-- ⚙️ Financeiro (submenu inteiro a implementar)
-                <div class="relative group">
-                  <button
-                    class="px-3 py-2 text-sm font-medium rounded hover:bg-slate-100"
-                    :class="{ 'text-indigo-600': route().current('financeiro.*') }"
-                    type="button"
-                  >
-                    Financeiro
-                  </button>
-                  <div
-                    class="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition absolute mt-2 min-w-64 rounded-xl border bg-white shadow-lg p-2"
-                  >
-                    <NavLink
-                      class="block px-3 py-2 rounded hover:bg-slate-50"
-                      :href="route('financeiro.contas.index')"
-                      :active="route().current('financeiro.contas.*')"
-                    >
-                      Contas Bancárias
-                    </NavLink>
-                    <NavLink
-                      class="block px-3 py-2 rounded hover:bg-slate-50"
-                      :href="route('financeiro.cc.clientes')"
-                      :active="route().current('financeiro.cc.clientes')"
-                    >
-                      Conta Corrente Clientes
-                    </NavLink>
-                    <NavLink
-                      class="block px-3 py-2 rounded hover:bg-slate-50"
-                      :href="route('financeiro.faturas.fornecedores')"
-                      :active="route().current('financeiro.faturas.fornecedores')"
-                    >
-                      Faturas Fornecedores
-                    </NavLink>
-                  </div>
-                </div>
-                -->
+                                <!-- 💰 Financeiro (submenu) -->
+                                <div class="relative group inline-block">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-150 ease-in-out border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 focus:outline-none"
+                                        :class="{
+                                            'border-indigo-500 text-gray-900':
+                                                route().current(
+                                                    'financeiro.contas-bancarias',
+                                                ) ||
+                                                route().current(
+                                                    'financeiro.conta-corrente-clientes',
+                                                ) ||
+                                                route().current(
+                                                    'financeiro.faturas-fornecedor.*',
+                                                ),
+                                        }"
+                                        aria-haspopup="menu"
+                                        aria-expanded="false"
+                                    >
+                                        Financeiro
+                                    </button>
 
-                                <!-- ⚙️ Configurações (submenu inteiro a implementar)
-                <div class="relative group">
-                  <button
-                    class="px-3 py-2 text-sm font-medium rounded hover:bg-slate-100"
-                    :class="{
-                      'text-indigo-600':
-                        route().current('config.*') ||
-                        route().current('artigos.*') ||
-                        route().current('logs.*'),
-                    }"
-                    type="button"
-                  >
-                    Configurações
-                  </button>
-                  <div
-                    class="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition absolute mt-2 min-w-[22rem] rounded-xl border bg-white shadow-lg p-3 grid grid-cols-1 gap-1"
-                  >
-                    <div class="space-y-1">
-                      <div class="px-3 py-1 text-xs uppercase tracking-wide text-slate-500">
-                        Tabelas de Base
-                      </div>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('config.paises.index')"
-                        :active="route().current('config.paises.*')"
-                      >
-                        Entidades - Países
-                      </NavLink>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('config.funcoes-contacto.index')"
-                        :active="route().current('config.funcoes-contacto.*')"
-                      >
-                        Contactos - Funções
-                      </NavLink>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('config.calendario.tipos.index')"
-                        :active="route().current('config.calendario.tipos.*')"
-                      >
-                        Calendário - Tipos
-                      </NavLink>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('config.calendario.acoes.index')"
-                        :active="route().current('config.calendario.acoes.*')"
-                      >
-                        Calendário - Acções
-                      </NavLink>
-                    </div>
+                                    <div class="absolute left-0 top-full z-50">
+                                        <div
+                                            class="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition pt-2"
+                                        >
+                                            <div
+                                                class="min-w-64 rounded-xl border bg-white shadow-lg p-2 flex flex-col gap-1"
+                                                role="menu"
+                                            >
+                                                <NavLink
+                                                    class="inline-flex items-center px-3 py-2 rounded hover:bg-slate-50"
+                                                    :href="
+                                                        route(
+                                                            'financeiro.contas-bancarias',
+                                                        )
+                                                    "
+                                                    :active="
+                                                        route().current(
+                                                            'financeiro.contas-bancarias',
+                                                        )
+                                                    "
+                                                    role="menuitem"
+                                                >
+                                                    Contas Bancárias
+                                                </NavLink>
 
-                    <div class="space-y-1">
-                      <div class="px-3 py-1 text-xs uppercase tracking-wide text-slate-500">
-                        Operacional
-                      </div>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('artigos.index')"
-                        :active="route().current('artigos.*')"
-                      >
-                        Artigos
-                      </NavLink>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('config.iva.index')"
-                        :active="route().current('config.iva.*')"
-                      >
-                        Financeiro - IVA
-                      </NavLink>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('logs.index')"
-                        :active="route().current('logs.*')"
-                      >
-                        Logs
-                      </NavLink>
-                      <NavLink
-                        class="block px-3 py-2 rounded hover:bg-slate-50"
-                        :href="route('config.empresa')"
-                        :active="route().current('config.empresa')"
-                      >
-                        Empresa
-                      </NavLink>
-                    </div>
-                  </div>
-                </div>
-                -->
+                                                <NavLink
+                                                    class="inline-flex items-center px-3 py-2 rounded hover:bg-slate-50"
+                                                    :href="
+                                                        route(
+                                                            'financeiro.conta-corrente-clientes',
+                                                        )
+                                                    "
+                                                    :active="
+                                                        route().current(
+                                                            'financeiro.conta-corrente-clientes',
+                                                        )
+                                                    "
+                                                    role="menuitem"
+                                                >
+                                                    Conta Corrente Clientes
+                                                </NavLink>
+
+                                                <NavLink
+                                                    class="inline-flex items-center px-3 py-2 rounded hover:bg-slate-50"
+                                                    :href="
+                                                        route(
+                                                            'financeiro.faturas-fornecedor.index',
+                                                        )
+                                                    "
+                                                    :active="
+                                                        route().current(
+                                                            'financeiro.faturas-fornecedor.*',
+                                                        )
+                                                    "
+                                                    role="menuitem"
+                                                >
+                                                    Faturas Fornecedores
+                                                </NavLink>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ⚙️ Configurações (submenu) — atualizado -->
+                                <div class="relative group inline-block">
+                                    <button
+                                        type="button"
+                                        class="px-3 py-2 text-sm font-medium rounded hover:bg-slate-100"
+                                        :class="{
+                                            'text-indigo-600':
+                                                route().current('config.*') ||
+                                                route().current('artigos.*') ||
+                                                route().current('logs.*'),
+                                        }"
+                                        aria-haspopup="menu"
+                                        aria-expanded="false"
+                                    >
+                                        Configurações
+                                    </button>
+
+                                    <!-- dropdown: colado ao botão, subitens em coluna -->
+                                    <div class="absolute left-0 top-full z-50">
+                                        <!-- 'ponte' hoverable -->
+                                        <div class="pt-2">
+                                            <div
+                                                class="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition min-w-[22rem] rounded-xl border bg-white shadow-lg p-3 grid grid-cols-1 gap-1"
+                                            >
+                                                <!-- Tabelas de Base -->
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="px-3 py-1 text-xs uppercase tracking-wide text-slate-500"
+                                                    >
+                                                        Tabelas de Base
+                                                    </div>
+
+                                                    <!-- Países -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route(
+                                                                'config.paises.index',
+                                                            )
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'config.paises.*',
+                                                            )
+                                                        "
+                                                    >
+                                                        Países
+                                                    </NavLink>
+
+                                                    <!-- Contactos (Funções) -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route(
+                                                                'config.funcoes-contacto.index',
+                                                            )
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'config.funcoes-contacto.*',
+                                                            )
+                                                        "
+                                                    >
+                                                        Contactos
+                                                    </NavLink>
+
+                                                    <!-- Calendário (default: Tipos) -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route(
+                                                                'config.calendario.tipos.index',
+                                                            )
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'config.calendario.tipos.*',
+                                                            ) ||
+                                                            route().current(
+                                                                'config.calendario.acoes.*',
+                                                            )
+                                                        "
+                                                    >
+                                                        Calendário
+                                                    </NavLink>
+                                                </div>
+
+                                                <!-- Operacional -->
+                                                <div class="space-y-1">
+                                                    <div
+                                                        class="px-3 py-1 text-xs uppercase tracking-wide text-slate-500"
+                                                    >
+                                                        Operacional
+                                                    </div>
+
+                                                    <!-- Artigos -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route(
+                                                                'artigos.index',
+                                                            )
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'artigos.*',
+                                                            )
+                                                        "
+                                                    >
+                                                        Artigos
+                                                    </NavLink>
+
+                                                    <!-- IVA -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route(
+                                                                'config.iva.index',
+                                                            )
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'config.iva.*',
+                                                            )
+                                                        "
+                                                    >
+                                                        IVA
+                                                    </NavLink>
+
+                                                    <!-- Logs -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route('logs.index')
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'logs.*',
+                                                            )
+                                                        "
+                                                    >
+                                                        Logs
+                                                    </NavLink>
+
+                                                    <!-- Empresa -->
+                                                    <NavLink
+                                                        class="block px-3 py-2 rounded hover:bg-slate-50"
+                                                        :href="
+                                                            route(
+                                                                'config.empresa',
+                                                            )
+                                                        "
+                                                        :active="
+                                                            route().current(
+                                                                'config.empresa',
+                                                            )
+                                                        "
+                                                    >
+                                                        Empresa
+                                                    </NavLink>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

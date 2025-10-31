@@ -12,6 +12,20 @@ use App\Http\Controllers\Access\RolesController;
 use App\Http\Controllers\PropostasController;
 use App\Http\Controllers\AjaxLookupController;
 use App\Http\Controllers\OrdemTrabalhoController;
+use App\Http\Controllers\FornecedorFaturaController;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\Request;
+use App\Http\Controllers\ContaBancariaController;
+use App\Http\Controllers\ClienteMovimentoController;
+use App\Http\Controllers\Config\PaisesController;
+use App\Http\Controllers\Config\FuncoesContactoController;
+use App\Http\Controllers\Config\CalendarioTiposController;
+use App\Http\Controllers\Config\CalendarioAcoesController;
+use App\Http\Controllers\Config\IvaController as ConfigIvaController;
+use App\Http\Controllers\Config\EmpresaController as EmpresaConfigController;
+use App\Http\Controllers\LogsController;
+use App\Http\Controllers\ArtigosController;
+
 
 Route::get('/', function () {
 	return Inertia::render('Welcome', [
@@ -40,9 +54,6 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	Route::get('/contactos',  [\App\Http\Controllers\ContactosController::class, 'index'])->name('contactos.index');
 	Route::get('/calendario', fn() => inertia('Calendario/Index'))->name('calendario.index');
 
-
-	Route::get('/ordens-trabalho', [\App\Http\Controllers\OrdensTrabalhoController::class, 'index'])->name('ot.index');
-
 	// ---------------------------
 	// Arquivos Digitais (Docs)
 	// ---------------------------
@@ -69,14 +80,29 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	Route::get('/ajax/fornecedores', [AjaxLookupController::class, 'fornecedores'])->name('ajax.fornecedores');
 	Route::get('/ajax/artigos',      [AjaxLookupController::class, 'artigos'])->name('ajax.artigos');
 
-	// Financeiro
+	// FINANCEIRO
 	Route::prefix('financeiro')->name('financeiro.')->group(function () {
-		Route::get('/contas',               [\App\Http\Controllers\Financeiro\ContasController::class, 'index'])->name('contas.index');
-		Route::get('/cc-clientes',          [\App\Http\Controllers\Financeiro\ContaCorrenteClientesController::class, 'index'])->name('cc.clientes');
-		Route::get('/faturas-fornecedores', [\App\Http\Controllers\Financeiro\FaturasFornecedoresController::class, 'index'])->name('faturas.fornecedores');
+
+		// Faturas de Fornecedor
+		Route::get('faturas-fornecedor', [FornecedorFaturaController::class, 'index'])->name('faturas-fornecedor.index');
+		Route::get('faturas-fornecedor/create', [FornecedorFaturaController::class, 'create'])->name('faturas-fornecedor.create');
+		Route::post('faturas-fornecedor', [FornecedorFaturaController::class, 'store'])->name('faturas-fornecedor.store');
+		Route::get('faturas-fornecedor/{fornecedor_fatura}/edit', [FornecedorFaturaController::class, 'edit'])->name('faturas-fornecedor.edit');
+		Route::put('faturas-fornecedor/{fornecedor_fatura}', [FornecedorFaturaController::class, 'update'])->name('faturas-fornecedor.update');
+		Route::delete('faturas-fornecedor/{fornecedor_fatura}', [FornecedorFaturaController::class, 'destroy'])->name('faturas-fornecedor.destroy');
+
+		// Contas Bancárias
+		Route::get('contas-bancarias', [ContaBancariaController::class, 'index'])->name('contas-bancarias');
+		Route::post('contas-bancarias', [ContaBancariaController::class, 'store'])->name('contas-bancarias.store');
+		Route::put('contas-bancarias/{conta_bancaria}', [ContaBancariaController::class, 'update'])->name('contas-bancarias.update');
+		Route::delete('contas-bancarias/{conta_bancaria}', [ContaBancariaController::class, 'destroy'])->name('contas-bancarias.destroy');
+
+		// Conta Corrente Clientes
+		Route::get('conta-corrente-clientes', [ClienteMovimentoController::class, 'index'])->name('conta-corrente-clientes');
+		Route::post('conta-corrente-clientes', [ClienteMovimentoController::class, 'store'])->name('conta-corrente-clientes.store');
 	});
 
-	// ✅ Gestão de Acessos (com as tuas controllers em Access\*)
+	// ✅ Gestão de Acessos
 	Route::prefix('gestao-acessos')->name('access.')->group(function () {
 		// Utilizadores
 		Route::get('/utilizadores',                [UsersController::class, 'index'])
@@ -112,7 +138,7 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	});
 
 
-	// ✅ Encomendas (consolidado, escolha a tua controladora final)
+	// ✅ Encomendas
 	Route::prefix('encomendas')->name('encomendas.')->group(function () {
 		// CLIENTES
 		Route::get('clientes',               [SalesOrderController::class, 'index'])->name('clientes.index');
@@ -128,6 +154,92 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	});
 
 	Route::resource('ordens', OrdemTrabalhoController::class)->except(['create', 'show', 'edit']);
+
+	// ===============================
+	// CONFIGURAÇÕES
+	// ===============================
+	Route::prefix('configuracoes')->name('config.')->group(function () {
+		// Landing opcional (cards dos módulos)
+		Route::get('/', fn() => inertia('Configuracoes/Index'))->name('index');
+
+		// Países
+		Route::prefix('paises')->name('paises.')->group(function () {
+			Route::get('/', [PaisesController::class, 'index'])->name('index');
+			Route::post('/', [PaisesController::class, 'store'])->name('store');
+			Route::put('/{pais}', [PaisesController::class, 'update'])->name('update');
+			Route::delete('/{pais}', [PaisesController::class, 'destroy'])->name('destroy');
+		});
+
+		// Contactos - Funções
+		Route::prefix('funcoes-contacto')->name('funcoes-contacto.')->group(function () {
+			Route::get('/', [FuncoesContactoController::class, 'index'])->name('index');
+			Route::post('/', [FuncoesContactoController::class, 'store'])->name('store');
+			Route::put('/{funcao}', [FuncoesContactoController::class, 'update'])->name('update');
+			Route::delete('/{funcao}', [FuncoesContactoController::class, 'destroy'])->name('destroy');
+		});
+
+		// Calendário (abre por padrão em Tipos)
+		Route::redirect('/calendario', '/configuracoes/calendario/tipos')->name('calendario');
+
+		Route::prefix('calendario')->name('calendario.')->group(function () {
+			// Tipos
+			Route::prefix('tipos')->name('tipos.')->group(function () {
+				Route::get('/', [CalendarioTiposController::class, 'index'])->name('index');
+				Route::post('/', [CalendarioTiposController::class, 'store'])->name('store');
+				Route::put('/{tipo}', [CalendarioTiposController::class, 'update'])->name('update');
+				Route::delete('/{tipo}', [CalendarioTiposController::class, 'destroy'])->name('destroy');
+			});
+
+			// Ações
+			Route::prefix('acoes')->name('acoes.')->group(function () {
+				Route::get('/', [CalendarioAcoesController::class, 'index'])->name('index');
+				Route::post('/', [CalendarioAcoesController::class, 'store'])->name('store');
+				Route::put('/{acao}', [CalendarioAcoesController::class, 'update'])->name('update');
+				Route::delete('/{acao}', [CalendarioAcoesController::class, 'destroy'])->name('destroy');
+			});
+		});
+
+		// Financeiro - IVA
+		Route::prefix('iva')->name('iva.')->group(function () {
+			Route::get('/', [ConfigIvaController::class, 'index'])->name('index');
+			Route::post('/', [ConfigIvaController::class, 'store'])->name('store');
+			Route::put('/{iva}', [ConfigIvaController::class, 'update'])->name('update');
+			Route::delete('/{iva}', [ConfigIvaController::class, 'destroy'])->name('destroy');
+		});
+
+		// Empresa (singleton: mostra e atualiza)
+		Route::get('/empresa', [EmpresaConfigController::class, 'show'])->name('empresa');
+		Route::match(['put', 'patch'], '/empresa', [EmpresaConfigController::class, 'update'])->name('empresa.update');
+	});
+
+	// ===============================
+	// ARTIGOS (fica fora de /configuracoes para manter o nome 'artigos.*')
+	// ===============================
+	Route::prefix('artigos')->name('artigos.')->group(function () {
+		Route::get('/', [ArtigosController::class, 'index'])->name('index');
+		Route::post('/', [ArtigosController::class, 'store'])->name('store');
+		Route::put('/{artigo}', [ArtigosController::class, 'update'])->name('update');
+		Route::delete('/{artigo}', [ArtigosController::class, 'destroy'])->name('destroy');
+	});
+
+	// ===============================
+	// LOGS (somente leitura + opcional export)
+	// ===============================
+	Route::prefix('logs')->name('logs.')->group(function () {
+		Route::get('/', [LogsController::class, 'index'])->name('index');
+		// Opcional: export CSV
+		// Route::get('/export', [LogsController::class, 'export'])->name('export');
+	});
 });
+
+Route::get('/files/private', function (Request $request) {
+	$request->validate(['path' => ['required', 'string']]);
+	abort_unless(auth()->check(), 403);
+
+	$path = $request->query('path');
+	abort_unless(Storage::disk('private')->exists($path), 404);
+
+	return response()->file(Storage::disk('private')->path($path));
+})->name('files.private.show');
 
 require __DIR__ . '/auth.php';
