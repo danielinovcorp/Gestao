@@ -24,7 +24,7 @@ use App\Http\Controllers\Config\CalendarioAcoesController;
 use App\Http\Controllers\Config\IvaController as ConfigIvaController;
 use App\Http\Controllers\Config\EmpresaController as EmpresaConfigController;
 use App\Http\Controllers\LogsController;
-use App\Http\Controllers\ArtigosController;
+use App\Http\Controllers\Config\ArtigosController;
 
 
 Route::get('/', function () {
@@ -213,14 +213,15 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	});
 
 	// ===============================
-	// ARTIGOS (fica fora de /configuracoes para manter o nome 'artigos.*')
+	// CONFIGURAÇÕES - ARTIGOS
 	// ===============================
-	Route::prefix('artigos')->name('artigos.')->group(function () {
+	Route::prefix('configuracoes/artigos')->name('config.artigos.')->group(function () {
 		Route::get('/', [ArtigosController::class, 'index'])->name('index');
 		Route::post('/', [ArtigosController::class, 'store'])->name('store');
 		Route::put('/{artigo}', [ArtigosController::class, 'update'])->name('update');
 		Route::delete('/{artigo}', [ArtigosController::class, 'destroy'])->name('destroy');
 	});
+
 
 	// ===============================
 	// LOGS (somente leitura + opcional export)

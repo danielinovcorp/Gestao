@@ -435,12 +435,12 @@ watch(flash, (f) => {
                                                         class="block px-3 py-2 rounded hover:bg-slate-50"
                                                         :href="
                                                             route(
-                                                                'artigos.index',
+                                                                'config.artigos.index',
                                                             )
                                                         "
                                                         :active="
                                                             route().current(
-                                                                'artigos.*',
+                                                                'config.artigos.*',
                                                             )
                                                         "
                                                     >

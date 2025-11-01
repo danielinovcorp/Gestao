@@ -145,35 +145,35 @@ function removeRow(id: number) {
             <!-- Tabela -->
             <div class="bg-white rounded-xl shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                    <thead class="bg-slate-50">
                         <tr>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
                             >
                                 Número
                             </th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
                             >
                                 Cliente
                             </th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
                             >
                                 Responsável
                             </th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
                             >
                                 Estado
                             </th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
                             >
                                 Início
                             </th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
                             >
                                 Fim
                             </th>
