@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head, router, useForm } from "@inertiajs/vue3";
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 
 import ConfigTabs from "../_ConfigTabs.vue";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
-    Form as UiForm,
+    // REMOVIDO: Form as UiForm,
     FormField,
     FormItem,
     FormLabel,
@@ -30,6 +30,9 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
+type Estado = "ativo" | "inativo";
+type EstadoFilter = "all" | Estado;
+
 const props = defineProps<{
     items: {
         data: {
@@ -39,7 +42,7 @@ const props = defineProps<{
             descricao: string | null;
             preco: number | string;
             foto_path: string | null;
-            estado: "ativo" | "inativo";
+            estado: Estado;
             iva_id: number | null;
             iva_nome?: string | null;
             iva_percentagem?: number | string | null;
@@ -50,8 +53,8 @@ const props = defineProps<{
     };
     filters: {
         q?: string;
-        iva_id?: number | null;
-        estado?: string | null;
+        iva_id?: number | null | string;
+        estado?: Estado | string | null;
         per_page?: number;
     };
     ivaOptions: {
@@ -62,29 +65,46 @@ const props = defineProps<{
     filesRoute: string;
 }>();
 
-// --- filtros ---
-const q = ref(props.filters.q ?? "");
-const estado = ref<string | null>(props.filters.estado ?? null);
-const iva_id = ref<number | null>(props.filters.iva_id ?? null);
+// ---------------------------
+// Filtros
+// ---------------------------
+const q = ref<string>(props.filters.q ?? "");
+
+const estado = ref<EstadoFilter>(
+    props.filters.estado === "ativo" || props.filters.estado === "inativo"
+        ? (props.filters.estado as Estado)
+        : "all",
+);
+
+// iva como string: "all" | "42"
+const ivaFilter = ref<string>(
+    props.filters.iva_id != null && props.filters.iva_id !== ""
+        ? String(props.filters.iva_id)
+        : "all",
+);
 
 function search() {
     router.get(
-        route("artigos.index"),
+        route("config.artigos.index"),
         {
             q: q.value,
-            estado: estado.value,
-            iva_id: iva_id.value ?? "",
+            estado: estado.value === "all" ? "" : estado.value,
+            iva_id: ivaFilter.value === "all" ? "" : ivaFilter.value,
         },
         { preserveState: true, replace: true },
     );
 }
 
-// --- modal / form ---
+// ---------------------------
+//
+// Dialog / Form
+//
+// ---------------------------
 const open = ref(false);
 const isEditing = ref(false);
 const editingId = ref<number | null>(null);
 
-// para upload preview
+// preview local (novo upload) ou atual (quando editar)
 const localPreview = ref<string | null>(null);
 
 const form = useForm({
@@ -92,10 +112,10 @@ const form = useForm({
     nome: "",
     descricao: "",
     preco: "",
-    iva_id: null as number | null,
+    iva_id: null as number | null | string,
     foto: null as File | null,
     observacoes: "",
-    estado: "ativo" as "ativo" | "inativo",
+    estado: "ativo" as Estado,
     remove_foto: false as boolean,
 });
 
@@ -105,58 +125,81 @@ function openCreate() {
     localPreview.value = null;
     form.reset();
     form.estado = "ativo";
+    form.iva_id = null;
+    form.remove_foto = false;
     open.value = true;
 }
+
 function openEdit(row: any) {
     isEditing.value = true;
     editingId.value = row.id;
     localPreview.value = null;
     form.reset();
+
     form.referencia = row.referencia;
     form.nome = row.nome;
     form.descricao = row.descricao ?? "";
     form.preco = String(row.preco ?? "");
-    form.iva_id = row.iva_id ?? null;
+    // Certificar-se que iva_id é string ou null para o Select no formulário
+    form.iva_id = row.iva_id != null ? String(row.iva_id) : null;
     form.observacoes = "";
     form.estado = row.estado === "inativo" ? "inativo" : "ativo";
     form.remove_foto = false;
+
+    // foto atual (se não houver upload novo)
+    if (row.foto_path) {
+        const u = new URL(props.filesRoute);
+        u.searchParams.set("path", row.foto_path);
+        localPreview.value = u.toString();
+    }
+
     open.value = true;
 }
+
 function onFileChange(e: Event) {
     const input = e.target as HTMLInputElement;
     const f = input.files?.[0] || null;
     form.foto = f;
     localPreview.value = f ? URL.createObjectURL(f) : null;
 }
+
 function removeFoto() {
     form.foto = null;
     localPreview.value = null;
     form.remove_foto = true;
 }
+
 function submit() {
+    // converter IVA do select (string) para number|null antes de enviar
+    if (typeof form.iva_id === "string") {
+        form.iva_id = form.iva_id ? Number(form.iva_id) : null;
+    }
+
     const options = {
         preserveScroll: true,
         onSuccess: () => (open.value = false),
     };
+
     if (isEditing.value && editingId.value) {
-        form.post(route("artigos.update", editingId.value), {
-            ...options,
-            _method: "put",
-        });
+        // Correção: Usar form.put() para edição.
+        form.put(route("config.artigos.update", editingId.value), options);
     } else {
-        form.post(route("artigos.store"), options);
+        // Criação (POST)
+        form.post(route("config.artigos.store"), options);
     }
 }
+
 function destroyItem(id: number) {
     if (!confirm("Remover este artigo?")) return;
-    router.delete(route("artigos.destroy", id), { preserveScroll: true });
+    router.delete(route("config.artigos.destroy", id), {
+        preserveScroll: true,
+    });
 }
 
 const rows = computed(() => props.items.data ?? []);
 
 function fotoSrc(row: any) {
     if (!row.foto_path) return null;
-    // usa teu endpoint files.private.show
     const url = new URL(props.filesRoute);
     url.searchParams.set("path", row.foto_path);
     return url.toString();
@@ -177,7 +220,6 @@ function fotoSrc(row: any) {
         </template>
 
         <div class="p-6 space-y-4">
-            <!-- Filtros -->
             <div class="flex flex-wrap items-center gap-2">
                 <Input
                     v-model="q"
@@ -186,29 +228,27 @@ function fotoSrc(row: any) {
                     @keyup.enter="search"
                 />
 
-                <!-- Estado -->
                 <Select v-model="estado">
                     <SelectTrigger class="w-40">
                         <SelectValue placeholder="Estado" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         <SelectItem value="ativo">Ativo</SelectItem>
                         <SelectItem value="inativo">Inativo</SelectItem>
                     </SelectContent>
                 </Select>
 
-                <!-- IVA -->
-                <Select v-model="iva_id">
+                <Select v-model="ivaFilter">
                     <SelectTrigger class="w-52">
                         <SelectValue placeholder="IVA" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem :value="null">Todos</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         <SelectItem
                             v-for="o in ivaOptions"
                             :key="o.id"
-                            :value="o.id"
+                            :value="String(o.id)"
                         >
                             {{ o.label ?? "IVA " + (o.percentagem ?? "") }}
                             <span v-if="o.percentagem != null">
@@ -220,11 +260,10 @@ function fotoSrc(row: any) {
 
                 <Button @click="search">Filtrar</Button>
 
-                <div class="flex-1"></div>
+                <div class="flex-1" />
                 <Button @click="openCreate">Novo Artigo</Button>
             </div>
 
-            <!-- Tabela -->
             <div class="overflow-hidden rounded-xl border bg-white">
                 <table class="min-w-full">
                     <thead class="bg-slate-100">
@@ -340,16 +379,15 @@ function fotoSrc(row: any) {
             </div>
         </div>
 
-        <!-- Dialog Form -->
         <Dialog v-model:open="open">
             <DialogContent class="sm:max-w-[720px]">
-                <DialogHeader
-                    ><DialogTitle>{{
+                <DialogHeader>
+                    <DialogTitle>{{
                         isEditing ? "Editar Artigo" : "Novo Artigo"
-                    }}</DialogTitle></DialogHeader
-                >
+                    }}</DialogTitle>
+                </DialogHeader>
 
-                <UiForm
+                <form
                     @submit.prevent="submit"
                     class="grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
@@ -410,15 +448,16 @@ function fotoSrc(row: any) {
                             <FormLabel>IVA</FormLabel>
                             <FormControl>
                                 <Select v-model="form.iva_id">
-                                    <SelectTrigger
-                                        ><SelectValue
+                                    <SelectTrigger>
+                                        <SelectValue
                                             placeholder="Selecione o IVA"
-                                    /></SelectTrigger>
+                                        />
+                                    </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem
                                             v-for="o in ivaOptions"
                                             :key="o.id"
-                                            :value="o.id"
+                                            :value="String(o.id)"
                                         >
                                             {{
                                                 o.label ??
@@ -533,7 +572,7 @@ function fotoSrc(row: any) {
                             }}
                         </Button>
                     </div>
-                </UiForm>
+                </form>
             </DialogContent>
         </Dialog>
     </AuthenticatedLayout>

@@ -58,23 +58,26 @@ class EntidadeController extends Controller
 			return $uMask . '@' . $d;
 		};
 
-		// Mapeia campos cifrados para o front (sem devolver NIF em claro)
+		// Mapeia campos cifrados para o front (RGPD + Permissões)
 		$data->getCollection()->transform(function ($e) use ($authorized, $maskPhone, $maskEmail) {
+			$temConsentimento = $e->consentimento_rgpd === 'sim';
+			$podeVerDados = $authorized || $temConsentimento;
+
 			return [
 				'id'                 => $e->id,
 				'numero'             => $e->numero,
 				'is_cliente'         => $e->is_cliente,
 				'is_fornecedor'      => $e->is_fornecedor,
-				'nif'                => null, // nunca em claro
+				'nif'                => $podeVerDados ? $e->nif_enc : null, // ✅ Mostra com consentimento
 				'nome'               => $e->nome,
 				'morada'             => $e->morada,
 				'codigo_postal'      => $e->codigo_postal,
 				'localidade'         => $e->localidade,
 				'pais_id'            => $e->pais_id,
-				'telefone'           => $authorized ? $e->telefone_enc  : $maskPhone($e->telefone_enc),
-				'telemovel'          => $authorized ? $e->telemovel_enc : $maskPhone($e->telemovel_enc),
+				'telefone'           => $podeVerDados ? $e->telefone_enc  : $maskPhone($e->telefone_enc),
+				'telemovel'          => $podeVerDados ? $e->telemovel_enc : $maskPhone($e->telemovel_enc),
 				'website'            => $e->website,
-				'email'              => $authorized ? $e->email_enc     : $maskEmail($e->email_enc),
+				'email'              => $podeVerDados ? $e->email_enc     : $maskEmail($e->email_enc),
 				'consentimento_rgpd' => $e->consentimento_rgpd,
 				'estado'             => $e->estado,
 				'created_at'         => $e->created_at,
@@ -87,14 +90,13 @@ class EntidadeController extends Controller
 	public function store(StoreEntidadeRequest $request)
 	{
 		$nifNorm = Entidade::normalizeNif((string) $request->input('nif'));
-		$numero  = SequenceService::next('entidades');
 
+		// CORREÇÃO: Primeiro valida tudo ANTES de gerar o número
 		$e = new Entidade();
 		$e->fill([
-			'numero'              => $numero,
 			'is_cliente'          => (bool) $request->boolean('is_cliente'),
 			'is_fornecedor'       => (bool) $request->boolean('is_fornecedor'),
-			'nif_enc'             => $nifNorm, // cifrará via cast
+			'nif_enc'             => $nifNorm,
 			'nif_hash'            => hash('sha256', $nifNorm),
 			'nome'                => (string) $request->input('nome'),
 			'morada'              => $request->input('morada'),
@@ -110,12 +112,12 @@ class EntidadeController extends Controller
 			'estado'              => $request->input('estado', 'ativo'),
 		]);
 
-		// Garantia: pelo menos um tipo (também validado no FormRequest)
+		// Garantia: pelo menos um tipo
 		if (!$e->is_cliente && !$e->is_fornecedor) {
 			return response()->json(['message' => 'Selecione Cliente e/ou Fornecedor.'], 422);
 		}
 
-		// NIF único (por hash)
+		// NIF único (por hash) - ANTES de tentar salvar
 		if ($nifNorm) {
 			$exists = Entidade::where('nif_hash', hash('sha256', $nifNorm))->exists();
 			if ($exists) {
@@ -123,9 +125,30 @@ class EntidadeController extends Controller
 			}
 		}
 
-		$e->save();
-
-		return response()->json(['id' => $e->id, 'numero' => $e->numero], 201);
+		// CORREÇÃO: Só gera o número quando tudo estiver validado
+		try {
+			$numero = SequenceService::next('entidades');
+			$e->numero = $numero;
+			$e->save();
+			return response()->json(['id' => $e->id, 'numero' => $e->numero], 201);
+		} catch (\Exception $ex) {
+			// Se der erro de duplicação no número, tenta novamente
+			if (str_contains($ex->getMessage(), 'Duplicate entry') && str_contains($ex->getMessage(), 'numero')) {
+				try {
+					$numero = SequenceService::next('entidades');
+					$e->numero = $numero;
+					$e->save();
+					return response()->json(['id' => $e->id, 'numero' => $e->numero], 201);
+				} catch (\Exception $ex2) {
+					// Fallback final
+					$lastNumber = \Illuminate\Support\Facades\DB::table('entidades')->max('numero');
+					$e->numero = $lastNumber ? str_pad((string)((int)$lastNumber + 1), 4, '0', STR_PAD_LEFT) : '0001';
+					$e->save();
+					return response()->json(['id' => $e->id, 'numero' => $e->numero], 201);
+				}
+			}
+			throw $ex;
+		}
 	}
 
 	public function show(Entidade $entidade)
@@ -179,9 +202,13 @@ class EntidadeController extends Controller
 		return response()->json(['ok' => true]);
 	}
 
-	public function destroy(Entidade $entidade)
+	public function destroy(Request $request, Entidade $entidade)
 	{
-		$entidade->delete();
+		if ($request->boolean('force')) {
+			$entidade->forceDelete(); // apaga da BD
+		} else {
+			$entidade->delete();      // soft delete
+		}
 		return response()->json(['ok' => true]);
 	}
 }

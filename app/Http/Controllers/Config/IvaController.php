@@ -18,14 +18,14 @@ class IvaController extends Controller
 		$perPage = (int) ($request->integer('per_page') ?: 15);
 
 		// Descobrir colunas reais
-		$hasNome      = Schema::hasColumn('iva', 'nome');
-		$hasDesc      = Schema::hasColumn('iva', 'descricao');
-		$hasPercent   = Schema::hasColumn('iva', 'percentagem');
-		$hasTaxa      = Schema::hasColumn('iva', 'taxa');
-		$hasEstado    = Schema::hasColumn('iva', 'estado');
+		$hasNome    = Schema::hasColumn('iva', 'nome');
+		$hasDesc    = Schema::hasColumn('iva', 'descricao');
+		$hasPercent = Schema::hasColumn('iva', 'percentagem');
+		$hasTaxa    = Schema::hasColumn('iva', 'taxa');
+		$hasEstado  = Schema::hasColumn('iva', 'estado');
 
-		$labelCol    = $hasNome ? 'nome' : ($hasDesc ? 'descricao' : null);
-		$percentCol  = $hasPercent ? 'percentagem' : ($hasTaxa ? 'taxa' : null);
+		$labelCol   = $hasNome ? 'nome' : ($hasDesc ? 'descricao' : null);
+		$percentCol = $hasPercent ? 'percentagem' : ($hasTaxa ? 'taxa' : null);
 
 		$labelExpr   = $labelCol ? $labelCol : "'IVA'";
 		$percentExpr = $percentCol ? $percentCol : "NULL";
@@ -37,19 +37,28 @@ class IvaController extends Controller
 				DB::raw("$percentExpr as percentagem"),
 			])
 			->when($hasEstado, fn($q2) => $q2->addSelect('estado'))
-			->when($q && $labelCol, fn($qr) => $qr->where($labelCol, 'like', "%{$q}%"))
-			->when($hasEstado && in_array($estado, ['ativo', 'inativo'], true), fn($qr) => $qr->where('estado', $estado))
-			->orderByRaw($labelExpr);
+			->when($q && $labelCol, fn($qr) => $qr->where($labelCol, 'like', "%{$q}%"));
+
+		if ($hasEstado && in_array($estado, ['ativo', 'inativo'], true)) {
+			$query->where('estado', $estado);
+		}
+
+		// ✅ ordenação segura (se não há coluna de label, ordena por id)
+		if ($labelCol) {
+			$query->orderBy($labelCol);
+		} else {
+			$query->orderBy('id');
+		}
 
 		$items = $query->paginate($perPage)->appends($request->query());
 
 		return Inertia::render('Config/IVA/Index', [
-			'items'       => $items,
-			'filters'     => ['q' => $q, 'estado' => $estado, 'per_page' => $perPage],
-			'meta'        => [
-				'hasEstado'   => $hasEstado,
-				'labelCol'    => $labelCol,     // pode ser null
-				'percentCol'  => $percentCol,   // pode ser null
+			'items'   => $items,
+			'filters' => ['q' => $q, 'estado' => $estado, 'per_page' => $perPage],
+			'meta'    => [
+				'hasEstado'  => $hasEstado,
+				'labelCol'   => $labelCol,    // pode ser null
+				'percentCol' => $percentCol,  // pode ser null
 			],
 		]);
 	}
@@ -57,19 +66,26 @@ class IvaController extends Controller
 	public function store(Request $request)
 	{
 		// Descobrir colunas reais
-		$hasNome      = Schema::hasColumn('iva', 'nome');
-		$hasDesc      = Schema::hasColumn('iva', 'descricao');
-		$hasPercent   = Schema::hasColumn('iva', 'percentagem');
-		$hasTaxa      = Schema::hasColumn('iva', 'taxa');
-		$hasEstado    = Schema::hasColumn('iva', 'estado');
+		$hasNome    = Schema::hasColumn('iva', 'nome');
+		$hasDesc    = Schema::hasColumn('iva', 'descricao');
+		$hasPercent = Schema::hasColumn('iva', 'percentagem');
+		$hasTaxa    = Schema::hasColumn('iva', 'taxa');
+		$hasEstado  = Schema::hasColumn('iva', 'estado');
 
 		$labelCol   = $hasNome ? 'nome' : ($hasDesc ? 'descricao' : null);
 		$percentCol = $hasPercent ? 'percentagem' : ($hasTaxa ? 'taxa' : null);
 
+		// ✅ Normaliza "23,5" -> "23.5" ANTES da validação
+		if ($request->has('percentagem')) {
+			$request->merge([
+				'percentagem' => str_replace(',', '.', (string) $request->input('percentagem')),
+			]);
+		}
+
 		// validação (label e percent podem não existir na BD → guardo o que existir)
 		$rules = [
-			'label'      => ['required', 'string', 'max:150'],
-			'percentagem' => ['required', 'numeric', 'min:0'],
+			'label'       => ['required', 'string', 'max:150'],
+			'percentagem' => ['required', 'numeric', 'min:0', 'max:100'],
 		];
 		if ($hasEstado) {
 			$rules['estado'] = ['required', 'in:ativo,inativo'];
@@ -77,19 +93,19 @@ class IvaController extends Controller
 
 		$data = $request->validate($rules);
 
-		$insert = [];
-		if ($labelCol)   $insert[$labelCol]   = $data['label'];
-		if ($percentCol) $insert[$percentCol] = $data['percentagem'];
-		if ($hasEstado)  $insert['estado']    = $data['estado'];
-		$insert['created_at'] = now();
-		$insert['updated_at'] = now();
-
 		// unique opcional se existir labelCol
 		if ($labelCol) {
 			$request->validate([
 				'label' => [Rule::unique('iva', $labelCol)],
 			]);
 		}
+
+		$insert = [];
+		if ($labelCol)   $insert[$labelCol]   = $data['label'];
+		if ($percentCol) $insert[$percentCol] = (float) $data['percentagem']; // cast seguro
+		if ($hasEstado)  $insert['estado']    = $data['estado'];
+		$insert['created_at'] = now();
+		$insert['updated_at'] = now();
 
 		$id = DB::table('iva')->insertGetId($insert);
 
@@ -102,18 +118,25 @@ class IvaController extends Controller
 
 	public function update(Request $request, int $iva)
 	{
-		$hasNome      = Schema::hasColumn('iva', 'nome');
-		$hasDesc      = Schema::hasColumn('iva', 'descricao');
-		$hasPercent   = Schema::hasColumn('iva', 'percentagem');
-		$hasTaxa      = Schema::hasColumn('iva', 'taxa');
-		$hasEstado    = Schema::hasColumn('iva', 'estado');
+		$hasNome    = Schema::hasColumn('iva', 'nome');
+		$hasDesc    = Schema::hasColumn('iva', 'descricao');
+		$hasPercent = Schema::hasColumn('iva', 'percentagem');
+		$hasTaxa    = Schema::hasColumn('iva', 'taxa');
+		$hasEstado  = Schema::hasColumn('iva', 'estado');
 
 		$labelCol   = $hasNome ? 'nome' : ($hasDesc ? 'descricao' : null);
 		$percentCol = $hasPercent ? 'percentagem' : ($hasTaxa ? 'taxa' : null);
 
+		// ✅ Normaliza vírgula antes da validação
+		if ($request->has('percentagem')) {
+			$request->merge([
+				'percentagem' => str_replace(',', '.', (string) $request->input('percentagem')),
+			]);
+		}
+
 		$rules = [
-			'label'      => ['required', 'string', 'max:150'],
-			'percentagem' => ['required', 'numeric', 'min:0'],
+			'label'       => ['required', 'string', 'max:150'],
+			'percentagem' => ['required', 'numeric', 'min:0', 'max:100'],
 		];
 		if ($hasEstado) {
 			$rules['estado'] = ['required', 'in:ativo,inativo'];
@@ -130,7 +153,7 @@ class IvaController extends Controller
 
 		$update = [];
 		if ($labelCol)   $update[$labelCol]   = $data['label'];
-		if ($percentCol) $update[$percentCol] = $data['percentagem'];
+		if ($percentCol) $update[$percentCol] = (float) $data['percentagem']; // cast seguro
 		if ($hasEstado)  $update['estado']    = $data['estado'];
 		$update['updated_at'] = now();
 

@@ -11,6 +11,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription, // ✅ IMPORT para acessibilidade
 } from "@/components/ui/dialog";
 import {
     Form as UiForm,
@@ -50,13 +51,23 @@ const props = defineProps<{
 }>();
 
 const q = ref(props.filters.q ?? "");
-const estado = ref<string | null>(props.filters.estado ?? null);
+// Evitar value="" em shadcn Select
+const estado = ref<string | null>(
+    props.meta.hasEstado
+        ? (props.filters.estado ?? "") === "" || props.filters.estado == null
+            ? "all"
+            : String(props.filters.estado)
+        : null,
+);
 
 // filtro
 function search() {
     router.get(
         route("config.iva.index"),
-        { q: q.value, estado: estado.value ?? "" },
+        {
+            q: q.value,
+            estado: estado.value === "all" ? "" : (estado.value ?? ""),
+        },
         { preserveState: true, replace: true },
     );
 }
@@ -91,18 +102,28 @@ function openEdit(row: any) {
     open.value = true;
 }
 
-function submit() {
+// ⚠️ Handler para o Form do vee-validate/shadcn (sem .prevent!)
+function onSubmit() {
     const options = {
         preserveScroll: true,
         onSuccess: () => (open.value = false),
     };
+
+    // normaliza vírgula→ponto antes do submit
+    const payload = {
+        ...form.data(),
+        percentagem: form.percentagem
+            ? String(form.percentagem).replace(",", ".")
+            : "",
+    };
+
     if (isEditing.value && editingId.value) {
-        form.post(route("config.iva.update", editingId.value), {
-            ...options,
-            _method: "put",
-        });
+        form.transform(() => payload).put(
+            route("config.iva.update", editingId.value),
+            options,
+        );
     } else {
-        form.post(route("config.iva.store"), options);
+        form.transform(() => payload).post(route("config.iva.store"), options);
     }
 }
 
@@ -140,7 +161,7 @@ const rows = computed(() => props.items.data ?? []);
                         <SelectValue placeholder="Estado" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         <SelectItem value="ativo">Ativo</SelectItem>
                         <SelectItem value="inativo">Inativo</SelectItem>
                     </SelectContent>
@@ -201,8 +222,10 @@ const rows = computed(() => props.items.data ?? []);
                             <td class="px-4 py-2 text-sm">{{ row.label }}</td>
                             <td class="px-4 py-2 text-right text-sm">
                                 {{
-                                    row.percentagem != null
-                                        ? row.percentagem + "%"
+                                    row.percentagem != null &&
+                                    row.percentagem !== ""
+                                        ? Number(row.percentagem).toFixed(2) +
+                                          "%"
                                         : "—"
                                 }}
                             </td>
@@ -227,14 +250,16 @@ const rows = computed(() => props.items.data ?? []);
                                         size="sm"
                                         variant="secondary"
                                         @click="openEdit(row)"
-                                        >Editar</Button
                                     >
+                                        Editar
+                                    </Button>
                                     <Button
                                         size="sm"
                                         variant="destructive"
                                         @click="destroyItem(row.id)"
-                                        >Remover</Button
                                     >
+                                        Remover
+                                    </Button>
                                 </div>
                             </td>
                         </tr>
@@ -258,43 +283,58 @@ const rows = computed(() => props.items.data ?? []);
                     <DialogTitle>{{
                         isEditing ? "Editar IVA" : "Novo IVA"
                     }}</DialogTitle>
+                    <!-- ✅ Descrição para eliminar o warning de acessibilidade -->
+                    <DialogDescription>
+                        Preencha os campos abaixo e confirme para
+                        {{
+                            isEditing
+                                ? "guardar as alterações"
+                                : "criar a taxa de IVA"
+                        }}.
+                    </DialogDescription>
                 </DialogHeader>
 
-                <UiForm @submit.prevent="submit" class="space-y-4">
+                <!-- ⚠️ Sem .prevent aqui -->
+                <UiForm @submit="onSubmit" class="space-y-4">
                     <FormField name="label">
                         <FormItem>
-                            <FormLabel>{{
-                                props.meta.labelCol
-                                    ? props.meta.labelCol === "nome"
-                                        ? "Nome"
-                                        : "Descrição"
-                                    : "Etiqueta"
-                            }}</FormLabel>
-                            <FormControl
-                                ><Input
+                            <FormLabel>
+                                {{
+                                    props.meta.labelCol
+                                        ? props.meta.labelCol === "nome"
+                                            ? "Nome"
+                                            : "Descrição"
+                                        : "Etiqueta"
+                                }}
+                            </FormLabel>
+                            <FormControl>
+                                <Input
                                     v-model="form.label"
                                     placeholder="Ex.: Normal, Intermédio, Reduzido..."
-                            /></FormControl>
-                            <FormMessage v-if="form.errors.label">{{
-                                form.errors.label
-                            }}</FormMessage>
+                                />
+                            </FormControl>
+                            <FormMessage v-if="form.errors.label">
+                                {{ form.errors.label }}
+                            </FormMessage>
                         </FormItem>
                     </FormField>
 
                     <FormField name="percentagem">
                         <FormItem>
                             <FormLabel>Percentagem (%)</FormLabel>
-                            <FormControl
-                                ><Input
+                            <FormControl>
+                                <Input
                                     type="number"
                                     step="0.01"
                                     min="0"
+                                    max="100"
                                     v-model="form.percentagem"
                                     placeholder="23"
-                            /></FormControl>
-                            <FormMessage v-if="form.errors.percentagem">{{
-                                form.errors.percentagem
-                            }}</FormMessage>
+                                />
+                            </FormControl>
+                            <FormMessage v-if="form.errors.percentagem">
+                                {{ form.errors.percentagem }}
+                            </FormMessage>
                         </FormItem>
                     </FormField>
 
@@ -326,9 +366,9 @@ const rows = computed(() => props.items.data ?? []);
                                     </div>
                                 </RadioGroup>
                             </FormControl>
-                            <FormMessage v-if="form.errors.estado">{{
-                                form.errors.estado
-                            }}</FormMessage>
+                            <FormMessage v-if="form.errors.estado">
+                                {{ form.errors.estado }}
+                            </FormMessage>
                         </FormItem>
                     </FormField>
 
@@ -337,8 +377,9 @@ const rows = computed(() => props.items.data ?? []);
                             type="button"
                             variant="secondary"
                             @click="open = false"
-                            >Cancelar</Button
                         >
+                            Cancelar
+                        </Button>
                         <Button type="submit" :disabled="form.processing">
                             {{
                                 form.processing

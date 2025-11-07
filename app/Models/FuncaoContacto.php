@@ -8,7 +8,7 @@ class FuncaoContacto extends Model
 {
 	protected $table = 'funcoes_contacto';
 
-	protected $fillable = ['nome'];
+	protected $fillable = ['nome', 'estado'];
 
 	// (Opcional) relação inversa
 	public function contactos()

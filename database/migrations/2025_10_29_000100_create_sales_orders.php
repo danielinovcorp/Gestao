@@ -29,7 +29,7 @@ return new class extends Migration
 				$t->string('descricao')->nullable();
 				$t->decimal('quantidade', 12, 3);
 				$t->decimal('preco', 12, 2);
-				$t->foreignId('iva_id')->nullable()->constrained('ivas');
+				$t->foreignId('iva_id')->nullable()->constrained('iva');
 				$t->foreignId('fornecedor_id')->nullable()->constrained('entidades');
 				$t->decimal('total', 12, 2);
 				$t->timestamps();

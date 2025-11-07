@@ -10,11 +10,10 @@ class RolesAndPermissionsSeeder extends Seeder
 {
 	public function run(): void
 	{
-		// limpa cache das permissões
 		app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 
-		// --- Permissões do seu domínio (já existiam)
-		$domainPerms = [
+		// === DOMÍNIO (em português - já existente no sistema) ===
+		$domain = [
 			'ver entidades',
 			'criar entidades',
 			'editar entidades',
@@ -32,22 +31,14 @@ class RolesAndPermissionsSeeder extends Seeder
 			'editar documentos',
 			'remover documentos',
 			'download documentos',
+			'ver ordens',
+			'criar ordens',
+			'editar ordens',
+			'remover ordens',
 		];
 
-		// --- Permissões do módulo Gestão de Acessos (novo)
-		$accessPerms = [
-			'access.users.view',
-			'access.users.create',
-			'access.users.update',
-			'access.users.delete',
-			'access.roles.view',
-			'access.roles.create',
-			'access.roles.update',
-			'access.roles.delete',
-		];
-
-		// --- (Opcional) Permissões tipo “Menu A/B” com CRUD
-		$menuPerms = [
+		// === MENUS (RESTful - em inglês) ===
+		$menus = [
 			'menu_a.create',
 			'menu_a.read',
 			'menu_a.update',
@@ -58,22 +49,35 @@ class RolesAndPermissionsSeeder extends Seeder
 			'menu_b.delete',
 		];
 
-		$all = array_merge($domainPerms, $accessPerms, $menuPerms);
+		// === GESTÃO DE ACESSOS ===
+		$access = [
+			'access.users.view',
+			'access.users.create',
+			'access.users.update',
+			'access.users.delete',
+			'access.roles.view',
+			'access.roles.create',
+			'access.roles.update',
+			'access.roles.delete',
+		];
+
+		$all = array_merge($domain, $menus, $access);
 
 		foreach ($all as $p) {
 			Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);
 		}
 
-		// Roles (mantive admin, gestor, operador como você já usa)
-		$admin  = Role::firstOrCreate(['name' => 'admin',    'guard_name' => 'web']);
-		$gestor = Role::firstOrCreate(['name' => 'gestor',   'guard_name' => 'web']);
-		$oper   = Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']);
+		// === ROLES ===
+		$admin   = Role::firstOrCreate(['name' => 'admin',    'guard_name' => 'web']);
+		$gestor  = Role::firstOrCreate(['name' => 'gestor',   'guard_name' => 'web']);
+		$operador = Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']);
 
 		// Admin: tudo
 		$admin->syncPermissions(Permission::pluck('name')->toArray());
 
-		// Gestor: leitura/edição principais + ver acessos
+		// Gestor: edição + visualização de acessos
 		$gestor->syncPermissions([
+			// Domínio
 			'ver entidades',
 			'criar entidades',
 			'editar entidades',
@@ -86,22 +90,22 @@ class RolesAndPermissionsSeeder extends Seeder
 			'ver documentos',
 			'criar documentos',
 			'editar documentos',
-			// menus (se quiser)
-			'menu_a.read',
-			'menu_a.update',
-			'menu_b.read',
-			'menu_b.update',
-			// gestão de acessos (ver apenas)
-			'access.users.view',
-			'access.roles.view',
 			'ver ordens',
 			'criar ordens',
 			'editar ordens',
 			'remover ordens',
+			// Menus
+			'menu_a.read',
+			'menu_a.update',
+			'menu_b.read',
+			'menu_b.update',
+			// Acesso
+			'access.users.view',
+			'access.roles.view',
 		]);
 
-		// Operador: leituras
-		$oper->syncPermissions([
+		// Operador: só leitura
+		$operador->syncPermissions([
 			'ver entidades',
 			'ver contactos',
 			'ver artigos',

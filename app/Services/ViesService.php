@@ -4,22 +4,12 @@ namespace App\Services;
 
 use SoapClient;
 use SoapFault;
+use Illuminate\Support\Facades\Log;
 
 class ViesService
 {
 	private const WSDL = 'https://ec.europa.eu/taxation_customs/vies/checkVatService.wsdl';
 
-	/**
-	 * Ex.: validate('PT', '509999999')
-	 * Retorna:
-	 * [
-	 *   'valid' => bool,
-	 *   'countryCode' => 'PT',
-	 *   'vatNumber' => '509999999',
-	 *   'name' => 'NOME OU ---',
-	 *   'address' => 'ENDEREÇO OU ---'
-	 * ]
-	 */
 	public function validate(string $countryCode, string $vatNumber): array
 	{
 		[$cc, $vat] = $this->normalize($countryCode, $vatNumber);
@@ -37,6 +27,12 @@ class ViesService
 				'vatNumber'   => $vat,
 			]);
 
+			Log::info("VIES Validation Success: {$cc}{$vat}", [
+				'valid' => $res->valid,
+				'name' => $this->cleanString($res->name ?? ''),
+				'address' => $this->cleanString($res->address ?? '')
+			]);
+
 			return [
 				'valid'       => (bool)($res->valid ?? false),
 				'countryCode' => (string)($res->countryCode ?? $cc),
@@ -45,14 +41,15 @@ class ViesService
 				'address'     => $this->cleanString($res->address ?? ''),
 			];
 		} catch (SoapFault $e) {
-			// Quando o serviço está indisponível ou o NIF é inválido, o VIES lança faults
+			Log::error("VIES Validation Error: {$cc}{$vat} - " . $e->getMessage());
+
 			return [
 				'valid'       => false,
 				'countryCode' => $cc,
 				'vatNumber'   => $vat,
 				'name'        => '',
 				'address'     => '',
-				'error'       => $e->getMessage(),
+				'error'       => $this->translateViesError($e->getMessage()),
 			];
 		}
 	}
@@ -72,6 +69,68 @@ class ViesService
 		return $this->validate('PT', preg_replace('/\D+/', '', $raw));
 	}
 
+	/**
+	 * Validação local do NIF português
+	 */
+	public function validatePortugueseNif(string $nif): bool
+	{
+		$nif = preg_replace('/[^0-9]/', '', $nif);
+
+		if (!preg_match('/^[0-9]{9}$/', $nif)) {
+			return false;
+		}
+
+		// Algoritmo de validação do NIF português
+		$sum = 0;
+		for ($i = 0; $i < 8; $i++) {
+			$sum += $nif[$i] * (9 - $i);
+		}
+
+		$checkDigit = 11 - ($sum % 11);
+		if ($checkDigit >= 10) {
+			$checkDigit = 0;
+		}
+
+		return $checkDigit == $nif[8];
+	}
+
+	/**
+	 * Lista de países suportados pelo VIES
+	 */
+	public function getEuropeanCountries(): array
+	{
+		return [
+			'AT' => 'Áustria',
+			'BE' => 'Bélgica',
+			'BG' => 'Bulgária',
+			'CY' => 'Chipre',
+			'CZ' => 'República Checa',
+			'DE' => 'Alemanha',
+			'DK' => 'Dinamarca',
+			'EE' => 'Estónia',
+			'EL' => 'Grécia',
+			'ES' => 'Espanha',
+			'FI' => 'Finlândia',
+			'FR' => 'França',
+			'GB' => 'Reino Unido',
+			'HR' => 'Croácia',
+			'HU' => 'Hungria',
+			'IE' => 'Irlanda',
+			'IT' => 'Itália',
+			'LT' => 'Lituânia',
+			'LU' => 'Luxemburgo',
+			'LV' => 'Letónia',
+			'MT' => 'Malta',
+			'NL' => 'Países Baixos',
+			'PL' => 'Polónia',
+			'PT' => 'Portugal',
+			'RO' => 'Roménia',
+			'SE' => 'Suécia',
+			'SI' => 'Eslovénia',
+			'SK' => 'Eslováquia',
+		];
+	}
+
 	private function normalize(string $countryCode, string $vatNumber): array
 	{
 		$cc  = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $countryCode) ?: 'PT', 0, 2));
@@ -83,7 +142,25 @@ class ViesService
 	{
 		$s = trim($s);
 		if ($s === '---') return '';
-		// Endereços do VIES vêm com quebras de linha, normalizamos
 		return preg_replace('/\s+/', ' ', $s);
+	}
+
+	private function translateViesError(string $error): string
+	{
+		$translations = [
+			'INVALID_INPUT' => 'NIF ou país inválido',
+			'SERVICE_UNAVAILABLE' => 'Serviço VIES indisponível',
+			'MS_UNAVAILABLE' => 'Serviço do país indisponível',
+			'TIMEOUT' => 'Tempo de resposta excedido',
+			'SERVER_BUSY' => 'Servidor ocupado',
+		];
+
+		foreach ($translations as $key => $translation) {
+			if (stripos($error, $key) !== false) {
+				return $translation;
+			}
+		}
+
+		return 'Erro na validação VIES';
 	}
 }

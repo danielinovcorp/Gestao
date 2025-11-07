@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -19,12 +21,182 @@ use App\Http\Controllers\ContaBancariaController;
 use App\Http\Controllers\ClienteMovimentoController;
 use App\Http\Controllers\Config\PaisesController;
 use App\Http\Controllers\Config\FuncoesContactoController;
+use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\Config\CalendarioTiposController;
 use App\Http\Controllers\Config\CalendarioAcoesController;
 use App\Http\Controllers\Config\IvaController as ConfigIvaController;
 use App\Http\Controllers\Config\EmpresaController as EmpresaConfigController;
 use App\Http\Controllers\LogsController;
 use App\Http\Controllers\Config\ArtigosController;
+// ✅ ADICIONADO: usa o controller da API de Entidades
+use App\Http\Controllers\Api\EntidadeController as ApiEntidadeController;
+
+Route::prefix('api/vies')->group(function () {
+	Route::get('/countries', function () {
+		$countries = [
+			'AT' => 'Áustria',
+			'BE' => 'Bélgica',
+			'BG' => 'Bulgária',
+			'CY' => 'Chipre',
+			'CZ' => 'República Checa',
+			'DE' => 'Alemanha',
+			'DK' => 'Dinamarca',
+			'EE' => 'Estónia',
+			'EL' => 'Grécia',
+			'ES' => 'Espanha',
+			'FI' => 'Finlândia',
+			'FR' => 'França',
+			'GB' => 'Reino Unido',
+			'HR' => 'Croácia',
+			'HU' => 'Hungria',
+			'IE' => 'Irlanda',
+			'IT' => 'Itália',
+			'LT' => 'Lituânia',
+			'LU' => 'Luxemburgo',
+			'LV' => 'Letónia',
+			'MT' => 'Malta',
+			'NL' => 'Países Baixos',
+			'PL' => 'Polónia',
+			'PT' => 'Portugal',
+			'RO' => 'Roménia',
+			'SE' => 'Suécia',
+			'SI' => 'Eslovénia',
+			'SK' => 'Eslováquia',
+		];
+		return response()->json($countries);
+	});
+
+	Route::post('/validate-vat', function (Request $request) {
+		$request->validate([
+			'country_code' => 'required|string|size:2',
+			'vat_number' => 'required|string|max:20',
+		]);
+
+		// Usar o serviço VIES real que você já tem
+		try {
+			$viesService = new \App\Services\ViesService();
+			$result = $viesService->validate($request->country_code, $request->vat_number);
+			return response()->json($result);
+		} catch (\Exception $e) {
+			return response()->json([
+				'valid' => false,
+				'error' => 'Serviço VIES indisponível: ' . $e->getMessage()
+			], 500);
+		}
+	});
+
+	Route::post('/validate-nif', function (Request $request) {
+		$request->validate([
+			'nif' => 'required|string|max:20'
+		]);
+
+		// Validação básica do NIF português
+		$nif = preg_replace('/[^0-9]/', '', $request->nif);
+
+		if (!preg_match('/^[0-9]{9}$/', $nif)) {
+			return response()->json(['valid' => false]);
+		}
+
+		// Algoritmo de validação do NIF português
+		$sum = 0;
+		for ($i = 0; $i < 8; $i++) {
+			$sum += $nif[$i] * (9 - $i);
+		}
+
+		$checkDigit = 11 - ($sum % 11);
+		if ($checkDigit >= 10) {
+			$checkDigit = 0;
+		}
+
+		$isValid = $checkDigit == $nif[8];
+
+		return response()->json(['valid' => $isValid]);
+	});
+});
+
+// ===============================
+// API ROUTES
+// ===============================
+Route::prefix('api')->group(function () {
+	// Países para selects - rota específica para API
+	Route::get('/paises', function () {
+		try {
+			$paises = DB::table('paises')
+				->select('id', 'nome', 'iso')
+				->orderBy('nome')
+				->get();
+
+			return response()->json($paises);
+		} catch (\Exception $e) {
+			// Fallback básico
+			$paises = [
+				['id' => 1, 'nome' => 'Portugal', 'iso' => 'PT'],
+				['id' => 2, 'nome' => 'Espanha', 'iso' => 'ES'],
+				['id' => 3, 'nome' => 'França', 'iso' => 'FR'],
+			];
+
+			return response()->json($paises);
+		}
+	});
+
+	// ✅ LISTAGEM COMPLETA (controller com paginação + RGPD)
+	Route::get('/entidades', [ApiEntidadeController::class, 'index']);
+	// CRUD de Entidades (usando teu Api\EntidadeController)
+	Route::post('/entidades', [ApiEntidadeController::class, 'store']);
+	Route::put('/entidades/{entidade}', [ApiEntidadeController::class, 'update']);
+	Route::patch('/entidades/{entidade}', [ApiEntidadeController::class, 'update']);
+	Route::delete('/entidades/{entidade}', [ApiEntidadeController::class, 'destroy']);
+
+
+	// ✅ LOOKUP leve para selects/combo (apenas id + nome)
+	Route::get('/entidades/lookup', function () {
+		return DB::table('entidades')
+			->select('id', 'nome')
+			->where('estado', 'ativo')
+			->orderBy('nome')
+			->limit(500)
+			->get();
+	});
+
+	// ✅ CHECK NIF real (com hash do NIF normalizado)
+	Route::get('/entidades/check-nif', function (Request $request) {
+		$request->validate(['nif' => 'required|string']);
+		$norm = \App\Models\Entidade::normalizeNif((string)$request->query('nif'));
+
+		if ($norm === '') {
+			return response()->json(['exists' => false]);
+		}
+
+		$exists = DB::table('entidades')
+			->where('nif_hash', hash('sha256', $norm))
+			->whereNull('deleted_at')
+			->exists();
+
+		return response()->json(['exists' => $exists]);
+	});
+
+	// Funções de contacto para combo
+	Route::get('/funcoes-contacto', function (Request $request) {
+		try {
+			$funcoes = DB::table('funcoes_contacto')
+				->select('id', 'nome')
+				->where('estado', 'ativo')
+				->orderBy('nome')
+				->get();
+
+			return response()->json($funcoes);
+		} catch (\Exception $e) {
+			return response()->json([], 500);
+		}
+	});
+
+	// Rotas CRUD para contactos
+	Route::get('/contactos', [ContactoController::class, 'index']);
+	Route::post('/contactos', [ContactoController::class, 'store']);
+	Route::get('/contactos/{contacto}', [ContactoController::class, 'show']);
+	Route::put('/contactos/{contacto}', [ContactoController::class, 'update']);
+	Route::delete('/contactos/{contacto}', [ContactoController::class, 'destroy']);
+});
 
 
 Route::get('/', function () {
@@ -209,7 +381,7 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 
 		// Empresa (singleton: mostra e atualiza)
 		Route::get('/empresa', [EmpresaConfigController::class, 'show'])->name('empresa');
-		Route::match(['put', 'patch'], '/empresa', [EmpresaConfigController::class, 'update'])->name('empresa.update');
+		Route::match(['put', 'patch', 'post'], '/empresa', [EmpresaConfigController::class, 'update'])->name('empresa.update');
 	});
 
 	// ===============================
@@ -233,14 +405,25 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	});
 });
 
+// privado (requer login)
 Route::get('/files/private', function (Request $request) {
 	$request->validate(['path' => ['required', 'string']]);
-	abort_unless(auth()->check(), 403);
+
+	abort_unless(Auth::check(), 403);
 
 	$path = $request->query('path');
 	abort_unless(Storage::disk('private')->exists($path), 404);
 
 	return response()->file(Storage::disk('private')->path($path));
 })->name('files.private.show');
+
+
+// público (apenas a logo atual)
+Route::get('/company/logo', function () {
+	$row = DB::table('empresa')->where('id', 1)->first();
+	abort_unless($row && !empty($row->logo_path), 404);
+	abort_unless(Storage::disk('private')->exists($row->logo_path), 404);
+	return response()->file(Storage::disk('private')->path($row->logo_path));
+})->name('company.logo');
 
 require __DIR__ . '/auth.php';

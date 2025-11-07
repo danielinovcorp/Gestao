@@ -34,7 +34,21 @@ class DatabaseSeeder extends Seeder
 		}
 
 		$this->call([
-			AccessRolesAndPermissionsSeeder::class,
+			PaisesSeeder::class,
+		]);
+
+		$this->call([
+			SequencesSeeder::class,
+			FuncoesContactoSeeder::class,
+		]);
+
+		$this->call([
+			EntidadesSeeder::class,
+		]);
+
+		$this->call([
+			IvaSeeder::class,
+			ArtigosSeeder::class,
 		]);
 
 		// 🔹 (Opcional) cria alguns utilizadores extra de teste

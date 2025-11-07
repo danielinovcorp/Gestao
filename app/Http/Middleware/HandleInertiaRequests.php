@@ -7,75 +7,64 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log; // ✅ IMPORT ADICIONADO
 
 class HandleInertiaRequests extends Middleware
 {
-	protected $rootView = 'app';
+    protected $rootView = 'app';
 
-	public function share(Request $request): array
-	{
-		return array_merge(parent::share($request), [
-			'auth' => [
-				'user' => $request->user(),
-			],
+    public function share(Request $request): array
+    {
+        return array_merge(parent::share($request), [
+            'auth' => [
+                'user' => $request->user(),
+            ],
 
-			// ---- Partilha global da empresa (sem depender de um Model específico)
-			'company' => function () {
-				try {
-					$row = null;
+            'company' => function () use ($request) {
+                try {
+                    // Busca direto na tabela empresa
+                    $row = DB::table('empresa')->where('id', 1)->first();
+                    
+                    if (!$row) {
+                        Log::warning('Tabela empresa vazia ou não encontrada');
+                        return null;
+                    }
 
-					// 1) Se existir um Model explícito, usamos
-					if (class_exists(\App\Models\Empresa::class)) {
-						$row = \App\Models\Empresa::query()->first();
-					} elseif (class_exists(\App\Models\Company::class)) {
-						$row = \App\Models\Company::query()->first();
-					}
+                    // Logo URL
+                    $logoUrl = null;
+                    if (!empty($row->logo_path)) {
+                        // Se está no disco private, usa a rota company.logo
+                        if (Storage::disk('private')->exists($row->logo_path)) {
+                            if (Route::has('company.logo')) {
+                                $logoUrl = route('company.logo');
+                            }
+                        }
+                    }
 
-					// 2) Se não houver Model, tentamos por tabela (ajusta se precisa)
-					if (!$row) {
-						if (DB::getSchemaBuilder()->hasTable('empresas')) {
-							$row = DB::table('empresas')->first();
-						} elseif (DB::getSchemaBuilder()->hasTable('empresa')) {
-							$row = DB::table('empresa')->first();
-						} elseif (DB::getSchemaBuilder()->hasTable('settings_empresa')) {
-							$row = DB::table('settings_empresa')->first();
-						}
-					}
+                    return [
+                        'id'            => $row->id ?? null,
+                        'nome'          => $row->nome ?? null,
+                        'morada'        => $row->morada ?? null,
+                        'codigo_postal' => $row->codigo_postal ?? null,
+                        'localidade'    => $row->localidade ?? null,
+                        'nif'           => $row->nif ?? null,
+                        'logo_path'     => $row->logo_path ?? null,
+                        'logo_url'      => $logoUrl,
+                    ];
+                } catch (\Throwable $e) {
+                    Log::error('Error in HandleInertiaRequests company share', [
+                        'error' => $e->getMessage()
+                    ]);
+                    return null;
+                }
+            },
 
-					if (!$row) {
-						return null;
-					}
-
-					// Monta logo_url a partir do que existir
-					$logoUrl = null;
-
-					// Se a coluna já for url pronta:
-					if (!empty($row->logo_url)) {
-						$logoUrl = $row->logo_url;
-					}
-
-					// Se existir caminho (logo_path), tentamos criar uma URL pública
-					if (!$logoUrl && !empty($row->logo_path)) {
-						// a) Se usas disco 'public'
-						if (Storage::disk('public')->exists($row->logo_path)) {
-							$logoUrl = Storage::disk('public')->url($row->logo_path);
-						}
-						// b) Se serves por rota protegida tipo /files?path=...
-						elseif (Route::has('files.show')) {
-							$logoUrl = route('files.show', ['path' => $row->logo_path]);
-						}
-					}
-
-					return [
-						'id'       => $row->id ?? null,
-						'nome'     => $row->nome ?? null,
-						'logo_url' => $logoUrl,
-					];
-				} catch (\Throwable $e) {
-					// Nunca quebres a app por causa da logo
-					return null;
-				}
-			},
-		]);
-	}
+            'flash' => function () use ($request) {
+                return [
+                    'success' => $request->session()->get('success'),
+                    'error' => $request->session()->get('error'),
+                ];
+            },
+        ]);
+    }
 }

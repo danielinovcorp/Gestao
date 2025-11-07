@@ -14,16 +14,18 @@ class PaisesController extends Controller
 	public function index(Request $request)
 	{
 		$q = trim((string) $request->get('q', ''));
-		$perPage = (int) ($request->integer('per_page') ?: 15);
+		$perPage = min(100, (int) ($request->integer('per_page') ?: 15));
 
-		// Campos mínimos garantidos: id, nome
+		// ✅ CORREÇÃO: Usando 'iso' em vez de 'codigo'
 		$query = DB::table('paises')
-			->select(['id', 'nome'])
-			->when($q, fn($qr) => $qr->where('nome', 'like', "%{$q}%"))
+			->select(['id', 'nome', 'iso']) // ✅ iso existe na sua tabela
+			->when($q, function ($query) use ($q) {
+				return $query->where('nome', 'like', "%{$q}%")
+					->orWhere('iso', 'like', "%{$q}%"); // ✅ Busca também por ISO
+			})
 			->orderBy('nome');
 
-		// paginação simples
-		$paises = $query->paginate($perPage)->appends($request->query());
+		$paises = $query->paginate($perPage)->withQueryString();
 
 		return Inertia::render('Config/Paises/Index', [
 			'items'   => $paises,
@@ -34,49 +36,93 @@ class PaisesController extends Controller
 	// CRIAR
 	public function store(Request $request)
 	{
+		// ✅ CORREÇÃO: Validação do 'iso'
 		$data = $request->validate([
-			'nome' => ['required', 'string', 'max:150', Rule::unique('paises', 'nome')],
+			'nome' => ['required', 'string', 'max:255', Rule::unique('paises', 'nome')],
+			'iso' => ['required', 'string', 'max:2', Rule::unique('paises', 'iso')],
 		]);
 
-		$id = DB::table('paises')->insertGetId([
-			'nome' => $data['nome'],
-		]);
+		try {
+			$id = DB::table('paises')->insertGetId([
+				'nome' => $data['nome'],
+				'iso' => strtoupper($data['iso']), // ✅ Garante maiúsculas
+				'created_at' => now(),
+				'updated_at' => now(),
+			]);
 
-		// (opcional) activity log
-		if (function_exists('activity')) {
-			activity('config.paises')->withProperties(['id' => $id])->log('create');
+			// Activity log (opcional)
+			if (function_exists('activity')) {
+				activity('config.paises')
+					->withProperties(['id' => $id])
+					->log('created');
+			}
+
+			return redirect()->route('config.paises.index')
+				->with('success', 'País criado com sucesso.');
+		} catch (\Exception $e) {
+			return back()->with('error', 'Erro ao criar país: ' . $e->getMessage());
 		}
-
-		return back()->with('success', 'País criado.');
 	}
 
 	// ATUALIZAR
 	public function update(Request $request, int $pais)
 	{
+		// ✅ CORREÇÃO: Validação do 'iso'
 		$data = $request->validate([
-			'nome' => ['required', 'string', 'max:150', Rule::unique('paises', 'nome')->ignore($pais)],
+			'nome' => ['required', 'string', 'max:255', Rule::unique('paises', 'nome')->ignore($pais)],
+			'iso' => ['required', 'string', 'max:2', Rule::unique('paises', 'iso')->ignore($pais)],
 		]);
 
-		DB::table('paises')->where('id', $pais)->update([
-			'nome' => $data['nome'],
-		]);
+		try {
+			$updated = DB::table('paises')->where('id', $pais)->update([
+				'nome' => $data['nome'],
+				'iso' => strtoupper($data['iso']), // ✅ Garante maiúsculas
+				'updated_at' => now(),
+			]);
 
-		if (function_exists('activity')) {
-			activity('config.paises')->withProperties(['id' => $pais])->log('update');
+			if ($updated) {
+				if (function_exists('activity')) {
+					activity('config.paises')
+						->withProperties(['id' => $pais])
+						->log('updated');
+				}
+
+				return redirect()->route('config.paises.index')
+					->with('success', 'País atualizado com sucesso.');
+			}
+
+			return back()->with('error', 'País não encontrado.');
+		} catch (\Exception $e) {
+			return back()->with('error', 'Erro ao atualizar país: ' . $e->getMessage());
 		}
-
-		return back()->with('success', 'País atualizado.');
 	}
 
 	// REMOVER
 	public function destroy(int $pais)
 	{
-		DB::table('paises')->where('id', $pais)->delete();
+		try {
+			// Verifica se o país está sendo usado em entidades
+			$emUso = DB::table('entidades')->where('pais_id', $pais)->exists();
 
-		if (function_exists('activity')) {
-			activity('config.paises')->withProperties(['id' => $pais])->log('delete');
+			if ($emUso) {
+				return back()->with('error', 'Não é possível remover o país porque está sendo usado em entidades.');
+			}
+
+			$deleted = DB::table('paises')->where('id', $pais)->delete();
+
+			if ($deleted) {
+				if (function_exists('activity')) {
+					activity('config.paises')
+						->withProperties(['id' => $pais])
+						->log('deleted');
+				}
+
+				return back()->with('success', 'País removido com sucesso.');
+			}
+
+			return back()->with('error', 'País não encontrado.');
+		} catch (\Exception $e) {
+			return back()->with('error', 'Erro ao remover país: ' . $e->getMessage());
 		}
-
-		return back()->with('success', 'País removido.');
 	}
 }
