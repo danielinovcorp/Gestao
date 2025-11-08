@@ -1,35 +1,68 @@
-﻿<script setup lang="ts">
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
+﻿<!-- resources/js/Pages/Propostas/Index.vue -->
+<script setup lang="ts">
 import { Head, router } from "@inertiajs/vue3";
 import { ref } from "vue";
-import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import PropostaDialog from "./PropostaDialog.vue";
+import { format } from "date-fns"; // ADICIONE ISSO
 
-const props = defineProps<{ propostas: any; filters: any }>();
+// ATUALIZE $formatDate PARA TRATAR NULL
+const $formatDate = (date: string | Date | null, fmt = "dd/MM/yyyy") => {
+  if (!date || date === null) return "—";
+  try {
+    return format(new Date(date), fmt);
+  } catch {
+    return "—";
+  }
+};
 
-// filtros
+const props = defineProps<{
+    propostas: {
+        data: Array<{
+            id: number;
+            numero: string;
+            data_proposta: string;
+            validade: string;
+            cliente: { nome: string };
+            total: number; // ADICIONE AQUI!
+            estado: "rascunho" | "fechado";
+        }>;
+        current_page: number;
+        last_page: number;
+        total: number;
+        links: any[];
+    };
+    filters: { search?: string };
+}>();
+
 const search = ref(props.filters.search ?? "");
+let searchTimeout: NodeJS.Timeout;
+
 function filtrar() {
-    router.get(
-        route("propostas.index"),
-        { search: search.value },
-        { preserveState: true },
-    );
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        router.get(
+            route("propostas.index"),
+            { search: search.value },
+            { preserveState: true, replace: true },
+        );
+    }, 500);
 }
 
-// modal nova proposta
 const open = ref(false);
 function onSaved() {
-    router.reload({ only: ["propostas"] });
+    router.reload({ only: ["propostas"] }); // ← RECARREGA SÓ A LISTA
+    open.value = false;
 }
 
-// ações
 function fechar(id: number) {
-    router.post(route("propostas.fechar", id));
+    if (!confirm("Tem certeza que deseja fechar esta proposta?")) return;
+    router.post(route("propostas.fechar", id), {}, { onSuccess: onSaved });
 }
 function pdf(id: number) {
-    window.location.href = route("propostas.pdf", id);
+    window.open(route("propostas.pdf", id), "_blank");
 }
 function converter(id: number) {
     router.post(route("propostas.converter", id));
@@ -40,56 +73,109 @@ function converter(id: number) {
     <Head title="Propostas" />
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="text-xl font-semibold leading-tight">Propostas</h2>
+            <h2 class="text-2xl font-semibold leading-tight">Propostas</h2>
         </template>
 
         <div class="p-6 space-y-4">
-            <!-- 🔍 Filtros -->
-            <form @submit.prevent="filtrar" class="flex gap-2">
+            <!-- Filtros + Nova Proposta -->
+            <div class="flex items-center gap-2">
                 <Input
                     v-model="search"
-                    type="text"
-                    placeholder="Pesquisar..."
-                    class="max-w-xs"
+                    placeholder="Pesquisar por número ou cliente..."
+                    class="w-80"
+                    @input="filtrar"
                 />
-                <Button type="submit" variant="default">Filtrar</Button>
-                <Button type="button" variant="default" @click="open = true"
-                    >Nova Proposta</Button
-                >
-            </form>
+                <Button @click="filtrar">Filtrar</Button>
+                <div class="flex-1"></div>
+                <Button @click="open = true">Nova Proposta</Button>
+            </div>
 
-            <!-- 📋 Tabela -->
-            <div
-                class="rounded-xl border bg-white shadow-sm mt-4 overflow-hidden"
-            >
-                <table class="min-w-full text-sm">
-                    <thead class="bg-gray-50 text-gray-700">
+            <!-- Tabela (EXATAMENTE como Países e Entidades) -->
+            <div class="overflow-hidden rounded-xl border bg-white">
+                <table class="min-w-full">
+                    <thead class="bg-slate-50">
                         <tr>
-                            <th class="px-3 py-2 text-left">Data</th>
-                            <th class="px-3 py-2 text-left">Número</th>
-                            <th class="px-3 py-2 text-left">Validade</th>
-                            <th class="px-3 py-2 text-left">Cliente</th>
-                            <th class="px-3 py-2 text-right">Valor Total</th>
-                            <th class="px-3 py-2 text-left">Estado</th>
-                            <th class="px-3 py-2 text-right">Ações</th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                #
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Número
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Data
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Validade
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Cliente
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Total
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Estado
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Ações
+                            </th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="bg-white divide-y divide-slate-200">
                         <tr
                             v-for="p in props.propostas.data"
                             :key="p.id"
-                            class="border-t hover:bg-gray-50 transition-colors"
+                            class="hover:bg-slate-50"
                         >
-                            <td class="px-3 py-2">
-                                {{ p.data_proposta ?? "—" }}
+                            <td class="px-4 py-2 text-sm text-slate-600">
+                                {{ p.id }}
                             </td>
-                            <td class="px-3 py-2">#{{ p.numero }}</td>
-                            <td class="px-3 py-2">{{ p.validade ?? "—" }}</td>
-                            <td class="px-3 py-2">{{ p.cliente?.nome }}</td>
-                            <td class="px-3 py-2 text-right">
-                                {{ Number(p.valor_total).toFixed(2) }} €
+                            <td class="px-4 py-2 text-sm font-mono font-bold">
+                                #{{ p.numero }}
                             </td>
-                            <td class="px-3 py-2">
+                            <td class="px-4 py-2 text-sm">
+                                {{
+                                    p.data_proposta
+                                        ? $formatDate(p.data_proposta)
+                                        : "—"
+                                }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ p.validade ? $formatDate(p.validade) : "—" }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ p.cliente?.nome }}
+                            </td>
+
+                            <!-- TOTAL CORRETO -->
+                            <td
+                                class="px-4 py-2 text-sm text-right font-medium"
+                            >
+                                {{
+                                    p.total
+                                        ? Number(p.total).toFixed(2)
+                                        : "0.00"
+                                }}
+                                €
+                            </td>
+
+                            <td class="px-4 py-2 text-sm">
                                 <span
                                     :class="{
                                         'text-amber-600 font-medium':
@@ -98,50 +184,84 @@ function converter(id: number) {
                                             p.estado === 'fechado',
                                     }"
                                 >
-                                    {{ p.estado }}
+                                    {{
+                                        p.estado === "rascunho"
+                                            ? "Rascunho"
+                                            : "Fechado"
+                                    }}
                                 </span>
                             </td>
-                            <td class="px-3 py-2 text-right space-x-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    @click="pdf(p.id)"
-                                    >PDF</Button
-                                >
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    @click="converter(p.id)"
-                                    >Converter</Button
-                                >
-                                <Button
-                                    v-if="p.estado === 'rascunho'"
-                                    size="sm"
-                                    @click="fechar(p.id)"
-                                    >Fechar</Button
-                                >
+
+                            <!-- AÇÕES -->
+                            <td class="px-4 py-2">
+                                <div class="flex gap-2 justify-end">
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        @click="pdf(p.id)"
+                                        >PDF</Button
+                                    >
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        @click="converter(p.id)"
+                                        >Converter</Button
+                                    >
+                                    <Button
+                                        v-if="p.estado === 'rascunho'"
+                                        size="sm"
+                                        variant="outline"
+                                        @click="fechar(p.id)"
+                                    >
+                                        Fechar
+                                    </Button>
+                                </div>
                             </td>
                         </tr>
 
-                        <!-- Sem resultados -->
                         <tr v-if="props.propostas.data.length === 0">
                             <td
-                                colspan="7"
-                                class="text-center py-6 text-slate-500"
+                                colspan="8"
+                                class="px-4 py-10 text-center text-slate-500"
                             >
-                                Sem resultados
+                                Nenhuma proposta encontrada
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Modal de criação -->
-            <PropostaDialog
-                :open="open"
-                :onClose="() => (open = false)"
-                @saved="onSaved"
-            />
+            <!-- Paginação -->
+            <div
+                class="flex items-center justify-between text-sm text-slate-600"
+            >
+                <div>Total: {{ props.propostas.total }} propostas</div>
+                <div class="flex items-center gap-4">
+                    <div>
+                        Página {{ props.propostas.current_page }} de
+                        {{ props.propostas.last_page }}
+                    </div>
+                    <div class="flex gap-1">
+                        <Button
+                            v-for="link in props.propostas.links"
+                            :key="link.label"
+                            size="sm"
+                            variant="ghost"
+                            :disabled="!link.url"
+                            :class="{ 'font-bold': link.active }"
+                            @click="router.get(link.url)"
+                            v-html="link.label"
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Modal -->
+        <PropostaDialog
+            :open="open"
+            :onClose="() => (open = false)"
+            @saved="onSaved"
+        />
     </AuthenticatedLayout>
 </template>

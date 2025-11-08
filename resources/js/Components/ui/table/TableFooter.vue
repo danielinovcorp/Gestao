@@ -1,17 +1,11 @@
-<script setup>
-import { cn } from "@/lib/utils";
-
-const props = defineProps({
-  class: { type: null, required: false },
-});
+<script setup lang="ts">
+defineProps<{
+  class?: string
+}>()
 </script>
 
 <template>
-  <tfoot
-    :class="
-      cn('border-t bg-muted/50 font-medium [&>tr]:last:border-b-0', props.class)
-    "
-  >
+  <tfoot :class="$props.class">
     <slot />
   </tfoot>
 </template>

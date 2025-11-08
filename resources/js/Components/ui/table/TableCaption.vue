@@ -1,13 +1,11 @@
-<script setup>
-import { cn } from "@/lib/utils";
-
-const props = defineProps({
-  class: { type: null, required: false },
-});
+<script setup lang="ts">
+defineProps<{
+  class?: string
+}>()
 </script>
 
 <template>
-  <caption :class="cn('mt-4 text-sm text-muted-foreground', props.class)">
+  <caption :class="$props.class">
     <slot />
   </caption>
 </template>

@@ -1,19 +1,14 @@
-<script setup>
-import { cn } from "@/lib/utils";
-
-const props = defineProps({
-  class: { type: null, required: false },
-});
+<script setup lang="ts">
+defineProps<{
+  class?: string
+  colSpan?: number
+}>()
 </script>
 
 <template>
   <td
-    :class="
-      cn(
-        'p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-0.5',
-        props.class,
-      )
-    "
+    :colspan="colSpan"
+    :class="$props.class"
   >
     <slot />
   </td>

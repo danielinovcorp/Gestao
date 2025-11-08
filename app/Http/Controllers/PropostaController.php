@@ -13,220 +13,255 @@ use Illuminate\Support\Facades\DB;
 
 class PropostaController extends Controller
 {
+	/** --------------------------------------------------------------
+	 *  INDEX
+	 * -------------------------------------------------------------- */
 	public function index(Request $request)
 	{
-		$propostas = Proposta::query()
-			->with('cliente:id,nome')
-			->when($request->estado, fn($q, $v) => $q->where('estado', $v))
-			->when($request->cliente_id, fn($q, $v) => $q->where('cliente_id', $v))
-			->orderByDesc('id')
-			->paginate(15)
-			->withQueryString();
+		$query = Proposta::query()
+			->with(['cliente:id,nome'])
+			->select([
+				'id',
+				'numero',
+				'cliente_id',
+				'data_proposta',
+				'validade',
+				'total',
+				'estado'
+			])
+			->when($request->search, function ($q, $search) {
+				$q->where('numero', 'like', "%$search%")
+					->orWhereHas('cliente', fn($q) => $q->where('nome', 'like', "%$search%"));
+			})
+			->orderByDesc('id');
+
+		$propostas = $query->paginate(15)->withQueryString();
+
+		// GARANTA QUE total É FLOAT
+		$propostas->getCollection()->transform(function ($p) {
+			$p->total = (float) $p->total;
+			$p->data_proposta = $p->data_proposta?->format('Y-m-d') ?: null; // ADICIONE
+			$p->validade = $p->validade?->format('Y-m-d') ?: null; // ADICIONE
+			return $p;
+		});
 
 		return Inertia::render('Propostas/Index', [
 			'propostas' => $propostas,
-			'filters' => $request->only('estado', 'cliente_id'),
+			'filters'   => $request->only('search'),
 		]);
 	}
 
-	public function create()
-	{
-		abort(404);
-	} // usamos Dialog no front
-	public function show(Proposta $proposta)
-	{
-		abort(404);
-	} // idem
-	public function edit(Proposta $proposta)
-	{
-		abort(404);
-	} // idem
-
+	/** --------------------------------------------------------------
+	 *  STORE (criação) - COM NOMES CORRETOS DAS COLUNAS
+	 * -------------------------------------------------------------- */
 	public function store(Request $request)
 	{
 		$payload = $request->validate([
-			'cliente_id' => [
-				'required',
-				Rule::exists('entidades', 'id')->where('tipo_cliente', 1), // garante que é Cliente
-			],
-			'estado' => ['nullable', 'in:rascunho,fechado'],
+			'cliente_id' => ['required', Rule::exists('entidades', 'id')->where('is_cliente', 1)],
+			'data_proposta' => ['required', 'date'],
+			'validade' => ['required', 'date'],
+			'estado' => ['required', 'in:rascunho,fechado'],
 
 			'linhas' => ['required', 'array', 'min:1'],
-			'linhas.*.artigo_id' => ['required', 'exists:artigos,id'],
-			'linhas.*.fornecedor_id' => [
-				'nullable',
-				Rule::exists('entidades', 'id')->where('tipo_fornecedor', 1), // se informado, tem de ser Fornecedor
-			],
-			'linhas.*.quantidade' => ['required', 'numeric', 'gt:0'],
-			'linhas.*.preco_unitario' => ['required', 'numeric', 'gte:0'],
-			'linhas.*.preco_custo' => ['nullable', 'numeric', 'gte:0'],
-
-			'observacoes' => ['nullable', 'array'],
+			'linhas.*.artigo_id'     => ['required', 'exists:artigos,id'],
+			'linhas.*.fornecedor_id' => ['nullable', Rule::exists('entidades', 'id')->where('is_fornecedor', 1)],
+			'linhas.*.quantidade'    => ['required', 'numeric', 'gt:0'],        // ← CORRETO
+			'linhas.*.preco_unitario' => ['required', 'numeric', 'gte:0'],     // ← CORRETO
+			'linhas.*.preco_custo'   => ['nullable', 'numeric', 'gte:0'],
 		]);
 
 		return DB::transaction(function () use ($payload) {
+			// Cria a proposta
 			$p = Proposta::create([
-				'numero' => Proposta::nextNumero(),
-				'cliente_id' => $payload['cliente_id'],
-				'estado' => 'rascunho',
+				'numero'        => Proposta::nextNumero(),
+				'cliente_id'    => $payload['cliente_id'],
+				'data_proposta' => $payload['data_proposta'],
+				'validade'      => $payload['validade'],
+				'estado'        => $payload['estado'],
 			]);
 
+			// Processa as linhas e calcula o total
+			$total = 0;
 			foreach ($payload['linhas'] as $l) {
-				$artigo = Artigo::find($l['artigo_id']);
-				$subtotal = bcmul($l['quantidade'], $l['preco_unitario'], 2);
+				$artigo = Artigo::findOrFail($l['artigo_id']);
+				$subtotal = $l['quantidade'] * $l['preco_unitario'];
+				$total += $subtotal;
 
 				PropostaLinha::create([
-					'proposta_id' => $p->id,
-					'artigo_id' => $artigo->id,
+					'proposta_id'   => $p->id,
+					'artigo_id'     => $artigo->id,
 					'fornecedor_id' => $l['fornecedor_id'] ?? null,
-					'descricao' => $artigo->nome,
-					'referencia' => $artigo->referencia,
-					'quantidade' => $l['quantidade'],
-					'preco_unitario' => $l['preco_unitario'],
-					'preco_custo' => $l['preco_custo'] ?? null,
-					'subtotal' => $subtotal,
+					'descricao'     => $artigo->nome,
+					'qtd'           => $l['quantidade'],        // ← CORRETO
+					'preco'         => $l['preco_unitario'],    // ← CORRETO
+					'preco_custo'   => $l['preco_custo'] ?? null,
+					'total_linha'   => $subtotal,
 				]);
 			}
 
-			if (!empty($payload['observacoes'])) {
-				$p->observacoes = $payload['observacoes'];
-			}
+			// Atualiza o total da proposta
+			$p->update(['total' => $total]);
 
-			$p->recalcularTotal();
-
-			// Se veio já “fechar”
-			if (($payload['estado'] ?? null) === 'fechado') {
-				$p->fechar();
-			}
-
-			return redirect()->route('propostas.index')->with('ok', 'Proposta criada.');
+			return redirect()->route('propostas.index')
+				->with('success', $p->estado === 'fechado'
+					? 'Proposta criada e fechada com sucesso!'
+					: 'Proposta criada como rascunho!');
 		});
 	}
 
+	/** --------------------------------------------------------------
+	 *  UPDATE (edição) - COM NOMES CORRETOS DAS COLUNAS
+	 * -------------------------------------------------------------- */
 	public function update(Request $request, Proposta $proposta)
 	{
 		if ($proposta->estado === 'fechado') {
-			return back()->with('err', 'Propostas fechadas não podem ser editadas.');
+			return back()->with('error', 'Propostas fechadas não podem ser editadas.');
 		}
 
 		$payload = $request->validate([
 			'cliente_id' => [
 				'required',
-				Rule::exists('entidades', 'id')->where('tipo_cliente', 1),
+				Rule::exists('entidades', 'id')->where('is_cliente', 1),
 			],
+			'data_proposta' => ['required', 'date'],
+			'validade' => ['required', 'date'],
+			'estado' => ['required', 'in:rascunho,fechado'],
 
 			'linhas' => ['required', 'array', 'min:1'],
-			'linhas.*.id' => ['nullable', 'exists:proposta_linhas,id'],
-			'linhas.*.artigo_id' => ['required', 'exists:artigos,id'],
+			'linhas.*.artigo_id'     => ['required', 'exists:artigos,id'],
 			'linhas.*.fornecedor_id' => [
 				'nullable',
-				Rule::exists('entidades', 'id')->where('tipo_fornecedor', 1),
+				Rule::exists('entidades', 'id')->where('is_fornecedor', 1),
 			],
-			'linhas.*.quantidade' => ['required', 'numeric', 'gt:0'],
+			'linhas.*.quantidade'    => ['required', 'numeric', 'gt:0'],
 			'linhas.*.preco_unitario' => ['required', 'numeric', 'gte:0'],
-			'linhas.*.preco_custo' => ['nullable', 'numeric', 'gte:0'],
-
-			'observacoes' => ['nullable', 'array'],
+			'linhas.*.preco_custo'   => ['nullable', 'numeric', 'gte:0'],
 		]);
 
 		return DB::transaction(function () use ($payload, $proposta) {
+			// Atualiza dados básicos da proposta
 			$proposta->update([
-				'cliente_id' => $payload['cliente_id'],
+				'cliente_id'    => $payload['cliente_id'],
+				'data_proposta' => $payload['data_proposta'],
+				'validade'      => $payload['validade'],
+				'estado'        => $payload['estado'],
 			]);
 
-			// estratégia simples: apaga e recria linhas
+			// Remove linhas antigas e cria novas
 			$proposta->linhas()->delete();
 
+			// Processa as linhas e calcula o total
+			$total = 0;
 			foreach ($payload['linhas'] as $l) {
-				$artigo = Artigo::find($l['artigo_id']);
-				$subtotal = bcmul($l['quantidade'], $l['preco_unitario'], 2);
+				$artigo = Artigo::findOrFail($l['artigo_id']);
+				$subtotal = $l['quantidade'] * $l['preco_unitario'];
+				$total += $subtotal;
 
+				// ✅ CORREÇÃO: Usa os nomes corretos das colunas
 				PropostaLinha::create([
-					'proposta_id' => $proposta->id,
-					'artigo_id' => $artigo->id,
+					'proposta_id'   => $proposta->id,
+					'artigo_id'     => $artigo->id,
 					'fornecedor_id' => $l['fornecedor_id'] ?? null,
-					'descricao' => $artigo->nome,
-					'referencia' => $artigo->referencia,
-					'quantidade' => $l['quantidade'],
-					'preco_unitario' => $l['preco_unitario'],
-					'preco_custo' => $l['preco_custo'] ?? null,
-					'subtotal' => $subtotal,
+					'descricao'     => $artigo->nome, // ✅ CORRETO
+					'qtd'           => $l['quantidade'], // ✅ CORRETO: 'qtd' em vez de 'quantidade'
+					'preco'         => $l['preco_unitario'], // ✅ CORRETO: 'preco' em vez de 'preco_unitario'
+					'preco_custo'   => $l['preco_custo'] ?? null, // ✅ CORRETO
+					'total_linha'   => $subtotal, // ✅ CORRETO: 'total_linha' em vez de 'subtotal'
 				]);
 			}
 
-			if (!empty($payload['observacoes'])) {
-				$proposta->observacoes = $payload['observacoes'];
-			}
+			// Atualiza o total da proposta
+			$proposta->update(['total' => $total]);
 
-			$proposta->recalcularTotal();
-
-			return redirect()->route('propostas.index')->with('ok', 'Proposta atualizada.');
+			return redirect()->route('propostas.index')
+				->with('success', $proposta->estado === 'fechado'
+					? 'Proposta atualizada e fechada com sucesso!'
+					: 'Proposta atualizada com sucesso!');
 		});
 	}
 
+	/** --------------------------------------------------------------
+	 *  DESTROY
+	 * -------------------------------------------------------------- */
 	public function destroy(Proposta $proposta)
 	{
 		if ($proposta->estado === 'fechado') {
-			return back()->with('err', 'Propostas fechadas não podem ser removidas.');
+			return back()->with('error', 'Propostas fechadas não podem ser removidas.');
 		}
 		$proposta->delete();
-		return back()->with('ok', 'Proposta removida.');
+		return back()->with('success', 'Proposta removida com sucesso.');
 	}
 
+	/** --------------------------------------------------------------
+	 *  FECHAR (ação separada – botão na listagem)
+	 * -------------------------------------------------------------- */
 	public function fechar(Proposta $proposta)
 	{
 		if ($proposta->linhas()->count() === 0) {
-			return back()->with('err', 'Não é possível fechar sem linhas.');
+			return back()->with('error', 'Não é possível fechar sem linhas.');
 		}
 		$proposta->fechar();
-		return back()->with('ok', 'Proposta fechada.');
+		return back()->with('success', 'Proposta fechada com sucesso.');
 	}
 
+	/** --------------------------------------------------------------
+	 *  PDF
+	 * -------------------------------------------------------------- */
 	public function pdf(Proposta $proposta)
 	{
+		$proposta->load([
+			'cliente:id,nome',
+			'linhas.artigo:id,referencia',
+		]);
+
 		$view = view('pdf.proposta', [
-			'proposta' => $proposta->load('cliente', 'linhas.artigo', 'linhas.fornecedor')
+			'proposta' => $proposta
 		])->render();
 
 		$dompdf = app('dompdf.wrapper');
-		$dompdf->loadHTML($view)->setPaper('a4');
+		$dompdf->loadHTML($view)->setPaper('a4', 'portrait');
 		return $dompdf->download('Proposta-' . $proposta->numero . '.pdf');
 	}
 
+	/** --------------------------------------------------------------
+	 *  CONVERTER EM ENCOMENDA
+	 * -------------------------------------------------------------- */
 	public function converterEncomenda(Proposta $proposta)
 	{
-		// Guard: módulo Encomendas ainda não disponível
-		if (!class_exists(\App\Models\EncomendaCliente::class) || !class_exists(\App\Models\EncomendaClienteLinha::class)) {
-			return back()->with('err', 'Módulo de Encomendas ainda não está disponível.');
+		if (
+			!class_exists(\App\Models\EncomendaCliente::class) ||
+			!class_exists(\App\Models\EncomendaClienteLinha::class)
+		) {
+			return back()->with('error', 'Módulo de Encomendas ainda não está disponível.');
 		}
 
 		if ($proposta->linhas()->count() === 0) {
-			return back()->with('err', 'Sem linhas para converter.');
+			return back()->with('error', 'Sem linhas para converter.');
 		}
 
 		$order = \App\Models\EncomendaCliente::create([
-			'numero' => \App\Models\EncomendaCliente::nextNumero(),
-			'cliente_id' => $proposta->cliente_id,
-			'estado' => 'rascunho',
-			'origem_tipo' => 'proposta',
-			'origem_id' => $proposta->id,
+			'numero'       => \App\Models\EncomendaCliente::nextNumero(),
+			'cliente_id'   => $proposta->cliente_id,
+			'estado'       => 'rascunho',
+			'origem_tipo'  => 'proposta',
+			'origem_id'    => $proposta->id,
 		]);
 
 		foreach ($proposta->linhas as $l) {
 			\App\Models\EncomendaClienteLinha::create([
 				'encomenda_cliente_id' => $order->id,
-				'artigo_id' => $l->artigo_id,
-				'descricao' => $l->descricao,
-				'referencia' => $l->referencia,
-				'quantidade' => $l->quantidade,
-				'preco_unitario' => $l->preco_unitario,
-				'subtotal' => $l->subtotal,
+				'artigo_id'            => $l->artigo_id,
+				'descricao'            => $l->descricao,
+				'referencia'           => $l->artigo->referencia ?? '',
+				'quantidade'           => $l->qtd, // ✅ CORRETO: 'qtd'
+				'preco_unitario'       => $l->preco, // ✅ CORRETO: 'preco'
+				'subtotal'             => $l->total_linha, // ✅ CORRETO: 'total_linha'
 			]);
 		}
 
 		$order->recalcularTotal();
 
-		return redirect()->route('encomendas-clientes.edit', $order->id)
-			->with('ok', 'Encomenda (rascunho) criada a partir da Proposta.');
+		return redirect()->route('encomendas.clientes.edit', $order->id)
+			->with('success', 'Encomenda (rascunho) criada a partir da Proposta.');
 	}
 }

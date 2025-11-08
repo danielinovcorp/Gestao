@@ -11,7 +11,7 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\DocController;
 use App\Http\Controllers\Access\UsersController;
 use App\Http\Controllers\Access\RolesController;
-use App\Http\Controllers\PropostasController;
+use App\Http\Controllers\PropostaController;
 use App\Http\Controllers\AjaxLookupController;
 use App\Http\Controllers\OrdemTrabalhoController;
 use App\Http\Controllers\FornecedorFaturaController;
@@ -242,10 +242,10 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	// ---------------------------
 	// Propostas
 	// ---------------------------
-	Route::resource('propostas', PropostasController::class)->except(['create', 'edit', 'show']);
-	Route::post('/propostas/{proposta}/fechar',              [PropostasController::class, 'fechar'])->name('propostas.fechar');
-	Route::get('/propostas/{proposta}/pdf',                  [PropostasController::class, 'pdf'])->name('propostas.pdf');
-	Route::post('/propostas/{proposta}/converter-encomenda', [PropostasController::class, 'converterEncomenda'])->name('propostas.converter');
+	Route::resource('propostas', PropostaController::class)->except(['create', 'edit', 'show']);
+	Route::post('/propostas/{proposta}/fechar',              [PropostaController::class, 'fechar'])->name('propostas.fechar');
+	Route::get('/propostas/{proposta}/pdf',                  [PropostaController::class, 'pdf'])->name('propostas.pdf');
+	Route::post('/propostas/{proposta}/converter-encomenda', [PropostaController::class, 'converterEncomenda'])->name('propostas.converter');
 
 	// Lookups/AJAX
 	Route::get('/ajax/clientes',     [AjaxLookupController::class, 'clientes'])->name('ajax.clientes');

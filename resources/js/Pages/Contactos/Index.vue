@@ -1,12 +1,13 @@
+<!-- resources/js/Pages/Contactos/Index.vue -->
 <script setup lang="ts">
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head } from "@inertiajs/vue3";
-import { onMounted, ref, computed } from "vue";
+import { onMounted, ref } from "vue";
 import { useContactos } from "@/composables/useContactos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// Dialog + Form (shadcn)
+// Dialog + Form
 import {
     Dialog,
     DialogContent,
@@ -14,14 +15,6 @@ import {
     DialogTitle,
     DialogDescription,
 } from "@/components/ui/dialog";
-import {
-    Form,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormControl,
-    FormMessage,
-} from "@/components/ui/form";
 import {
     Select,
     SelectTrigger,
@@ -32,41 +25,18 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 
-// DataTable (TanStack + shadcn table) — SAFE MODE (sem sorting/globalFilter)
-import {
-    useVueTable,
-    getCoreRowModel,
-    createColumnHelper,
-    type ColumnDef,
-} from "@tanstack/vue-table";
-import {
-    Table,
-    TableHeader,
-    TableRow,
-    TableHead,
-    TableBody,
-    TableCell,
-} from "@/components/ui/table";
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-
-// dados / ações
+// Dados
 const { rows, list, create, update, remove, loading } = useContactos();
 const q = ref("");
 
-// dialog + form
+// Dialog
 const open = ref(false);
 const editingId = ref<number | null>(null);
 
-// combos
+// Combos
 const entidadesOpts = ref<{ id: number; nome: string }[]>([]);
 const funcoesOpts = ref<{ id: number; nome: string }[]>([]);
 
-// modelo do formulário (mantém como já tinhas)
 type ContactoForm = {
     entidade_id: number | null;
     nome: string;
@@ -80,6 +50,7 @@ type ContactoForm = {
     estado: "ativo" | "inativo";
     observacoes: string;
 };
+
 const form = ref<ContactoForm>({
     entidade_id: null,
     nome: "",
@@ -94,7 +65,7 @@ const form = ref<ContactoForm>({
     observacoes: "",
 });
 
-// carregar combos
+// Carregar combos
 async function loadCombos() {
     try {
         const res = await fetch("/api/entidades?per_page=100", {
@@ -138,6 +109,7 @@ function startNew() {
     };
     open.value = true;
 }
+
 function startEdit(c: any) {
     editingId.value = c.id;
     form.value = {
@@ -158,91 +130,15 @@ function startEdit(c: any) {
 
 async function save() {
     try {
-        const payload = { ...form.value }; // o composable já normaliza
+        const payload = { ...form.value };
         if (editingId.value) await update(editingId.value, payload);
         else await create(payload);
 
         open.value = false;
         await list({ q: q.value });
     } catch (e: any) {
-        // Evita “Unhandled error…” e te dá feedback claro
-        const msg =
-            e?.response?.data?.message ||
-            e?.message ||
-            "Falha ao guardar contacto";
-        console.error("⚠️", msg, e?.response?.data ?? e);
-        // aqui podes disparar um toast, se tiveres (ex.: useToast)
-        // toast({ title: "Erro", description: msg, variant: "destructive" });
+        console.error("Erro ao salvar contacto:", e);
     }
-}
-
-// ---------- DataTable (colunas + table instance)
-type RowT = {
-    id: number;
-    numero?: number;
-    nome: string;
-    apelido?: string;
-    funcao?: string;
-    funcao_id?: number;
-    entidade?: string;
-    entidade_id?: number;
-    telefone?: string;
-    telemovel?: string;
-    email?: string;
-    estado?: "ativo" | "inativo";
-    consentimento_rgpd?: "sim" | "nao";
-};
-
-const columnHelper = createColumnHelper<RowT>();
-const columns: ColumnDef<RowT, any>[] = [
-    columnHelper.accessor("nome", {
-        header: "Nome",
-        cell: ({ row }) => row.original.nome ?? "",
-    }),
-    columnHelper.accessor("apelido", {
-        header: "Apelido",
-        cell: ({ getValue }) => getValue() ?? "—",
-    }),
-    columnHelper.accessor("funcao", {
-        header: "Função",
-        cell: ({ getValue }) => getValue() ?? "—",
-    }),
-    columnHelper.accessor("entidade", {
-        header: "Entidade",
-        cell: ({ getValue }) => getValue() ?? "—",
-    }),
-    columnHelper.accessor("telefone", {
-        header: "Telefone",
-        cell: ({ getValue }) => getValue() ?? "—",
-    }),
-    columnHelper.accessor("telemovel", {
-        header: "Telemóvel",
-        cell: ({ getValue }) => getValue() ?? "—",
-    }),
-    columnHelper.accessor("email", {
-        header: "Email",
-        cell: ({ getValue }) => getValue() ?? "—",
-    }),
-    columnHelper.display({
-        id: "actions",
-        header: "Ações",
-        cell: ({ row }) => row.original.id,
-    }),
-];
-
-const data = computed<RowT[]>(() => (rows.value as any[]) ?? []);
-const table = useVueTable<RowT>({
-    get data() {
-        return data.value;
-    },
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-});
-
-// ✅ helper do cabeçalho
-function headerText(h: any) {
-    const hd = h.column.columnDef.header;
-    return typeof hd === "function" ? h.column.id : (hd ?? "");
 }
 
 onMounted(async () => {
@@ -252,102 +148,148 @@ onMounted(async () => {
 </script>
 
 <template>
+    <Head title="Contactos" />
     <AuthenticatedLayout>
-        <Head title="Contactos" />
         <template #header>
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                Contactos
-            </h2>
+            <h2 class="text-2xl font-semibold leading-tight">Contactos</h2>
         </template>
 
         <div class="p-6 space-y-4">
-            <!-- toolbar -->
-            <div class="flex flex-wrap items-center gap-2">
+            <!-- Filtros + Novo -->
+            <div class="flex items-center gap-2">
                 <Input
                     v-model="q"
-                    placeholder="Pesquisar..."
-                    class="max-w-sm"
+                    placeholder="Pesquisar contacto..."
+                    class="w-80"
+                    @input="list({ q: q.value })"
                 />
                 <Button :disabled="loading" @click="list({ q: q.value })"
                     >Filtrar</Button
                 >
-                <Button @click="startNew">Novo</Button>
+                <div class="flex-1"></div>
+                <Button @click="startNew">Novo Contacto</Button>
             </div>
 
-            <!-- DataTable -->
-            <div class="rounded-xl border bg-white">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead
-                                v-for="h in table.getFlatHeaders()"
-                                :key="h.id"
+            <!-- TABELA (IGUAL À PROPOSTAS E PAÍSES) -->
+            <div class="overflow-hidden rounded-xl border bg-white">
+                <table class="min-w-full">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
                             >
-                                <div
-                                    class="inline-flex items-center gap-1 select-none"
-                                >
-                                    {{ headerText(h) }}
-                                </div>
-                            </TableHead>
-                        </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                        <TableRow
-                            v-for="row in table.getRowModel().rows"
-                            :key="row.id"
-                            class="border-t"
+                                #
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Nome
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Apelido
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Função
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Entidade
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Telefone
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Telemóvel
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Email
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Ações
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
+                        <tr
+                            v-for="c in rows"
+                            :key="c.id"
+                            class="hover:bg-slate-50"
                         >
-                            <TableCell
-                                v-for="cell in row.getVisibleCells()"
-                                :key="cell.id"
-                            >
-                                <template v-if="cell.column.id === 'actions'">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger as-child>
-                                            <Button variant="outline" size="sm"
-                                                >Ações</Button
-                                            >
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem
-                                                @click="startEdit(row.original)"
-                                                >Editar</DropdownMenuItem
-                                            >
-                                            <DropdownMenuItem
-                                                class="text-red-600"
-                                                @click="
-                                                    remove(
-                                                        row.original.id,
-                                                    ).then(() =>
-                                                        list({ q: q.value }),
-                                                    )
-                                                "
-                                            >
-                                                Remover
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </template>
-                                <template v-else>
-                                    {{ cell.getValue() ?? "—" }}
-                                </template>
-                            </TableCell>
-                        </TableRow>
+                            <td class="px-4 py-2 text-sm text-slate-600">
+                                {{ c.id }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">{{ c.nome }}</td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ c.apelido || "—" }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ c.funcao || "—" }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ c.entidade || "—" }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ c.telefone || "—" }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ c.telemovel || "—" }}
+                            </td>
+                            <td class="px-4 py-2 text-sm">
+                                {{ c.email || "—" }}
+                            </td>
+                            <td class="px-4 py-2">
+                                <div class="flex gap-2 justify-end">
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        @click="startEdit(c)"
+                                        >Editar</Button
+                                    >
+                                    <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        :disabled="loading"
+                                        @click="
+                                            remove(c.id).then(() =>
+                                                list({ q: q.value }),
+                                            )
+                                        "
+                                    >
+                                        Remover
+                                    </Button>
+                                </div>
+                            </td>
+                        </tr>
 
-                        <TableRow v-if="table.getRowModel().rows.length === 0">
-                            <TableCell
-                                :colspan="table.getAllColumns().length"
-                                class="p-4 text-center text-slate-500"
+                        <tr v-if="!rows || rows.length === 0">
+                            <td
+                                colspan="9"
+                                class="px-4 py-10 text-center text-slate-500"
                             >
-                                Sem resultados
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                                Nenhum contacto encontrado
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
-            <!-- Dialog com formulário -->
+            <!-- Sem paginação (assumindo que o composable já filtra) -->
+            <!-- Se quiser, posso adicionar depois -->
+
+            <!-- Dialog (mantido igual) -->
             <Dialog v-model:open="open">
                 <DialogContent class="max-w-2xl">
                     <DialogHeader>
@@ -355,205 +297,157 @@ onMounted(async () => {
                             >{{
                                 editingId ? "Editar" : "Novo"
                             }}
-                            contacto</DialogTitle
+                            Contacto</DialogTitle
                         >
                         <DialogDescription
-                            >Formulário para adicionar ou editar
-                            contactos</DialogDescription
+                            >Preencha os dados do contacto</DialogDescription
                         >
                     </DialogHeader>
 
-                    <!-- 👇 native form para evitar o erro do vee-validate/shadcn -->
-                    <Form class="grid gap-3">
-                        <form @submit.prevent="save" class="grid gap-3">
-                            <!-- Entidade -->
-                            <FormField name="entidade_id">
-                                <FormItem>
-                                    <FormLabel>Entidade</FormLabel>
-                                    <FormControl>
-                                        <Select v-model="form.entidade_id">
-                                            <SelectTrigger>
-                                                <SelectValue
-                                                    placeholder="Selecione a entidade"
-                                                />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem
-                                                    v-for="e in entidadesOpts"
-                                                    :key="e.id"
-                                                    :value="e.id"
-                                                >
-                                                    {{ e.nome }}
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            </FormField>
+                    <form @submit.prevent="save" class="grid gap-3">
+                        <!-- Entidade -->
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium">Entidade</label>
+                            <Select v-model="form.entidade_id">
+                                <SelectTrigger>
+                                    <SelectValue
+                                        placeholder="Selecione a entidade"
+                                    />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="e in entidadesOpts"
+                                        :key="e.id"
+                                        :value="e.id"
+                                    >
+                                        {{ e.nome }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                            <div class="grid sm:grid-cols-2 gap-3">
-                                <FormField name="nome">
-                                    <FormItem>
-                                        <FormLabel>Nome</FormLabel>
-                                        <FormControl
-                                            ><Input
-                                                v-model="form.nome"
-                                                autofocus
-                                        /></FormControl>
-                                    </FormItem>
-                                </FormField>
-
-                                <FormField name="apelido">
-                                    <FormItem>
-                                        <FormLabel>Apelido</FormLabel>
-                                        <FormControl
-                                            ><Input v-model="form.apelido"
-                                        /></FormControl>
-                                    </FormItem>
-                                </FormField>
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium">Nome</label>
+                                <Input v-model="form.nome" autofocus />
                             </div>
-
-                            <FormField name="funcao_id">
-                                <FormItem>
-                                    <FormLabel>Função</FormLabel>
-                                    <FormControl>
-                                        <Select v-model="form.funcao_id">
-                                            <SelectTrigger
-                                                ><SelectValue
-                                                    placeholder="Selecione a função"
-                                            /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem
-                                                    v-for="f in funcoesOpts"
-                                                    :key="f.id"
-                                                    :value="f.id"
-                                                >
-                                                    {{ f.nome }}
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </FormControl>
-                                </FormItem>
-                            </FormField>
-
-                            <div class="grid sm:grid-cols-2 gap-3">
-                                <FormField name="telefone">
-                                    <FormItem>
-                                        <FormLabel>Telefone</FormLabel>
-                                        <FormControl
-                                            ><Input v-model="form.telefone"
-                                        /></FormControl>
-                                    </FormItem>
-                                </FormField>
-                                <FormField name="telemovel">
-                                    <FormItem>
-                                        <FormLabel>Telemóvel</FormLabel>
-                                        <FormControl
-                                            ><Input v-model="form.telemovel"
-                                        /></FormControl>
-                                    </FormItem>
-                                </FormField>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium"
+                                    >Apelido</label
+                                >
+                                <Input v-model="form.apelido" />
                             </div>
+                        </div>
 
-                            <div class="grid sm:grid-cols-2 gap-3">
-                                <FormField name="email">
-                                    <FormItem>
-                                        <FormLabel>Email</FormLabel>
-                                        <FormControl
-                                            ><Input
-                                                v-model="form.email"
-                                                placeholder="ex: nome@empresa.pt"
-                                        /></FormControl>
-                                    </FormItem>
-                                </FormField>
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium">Função</label>
+                            <Select v-model="form.funcao_id">
+                                <SelectTrigger>
+                                    <SelectValue
+                                        placeholder="Selecione a função"
+                                    />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="f in funcoesOpts"
+                                        :key="f.id"
+                                        :value="f.id"
+                                    >
+                                        {{ f.nome }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                                <FormField name="estado">
-                                    <FormItem>
-                                        <FormLabel>Estado</FormLabel>
-                                        <FormControl>
-                                            <Select v-model="form.estado">
-                                                <SelectTrigger
-                                                    ><SelectValue
-                                                        placeholder="Selecione"
-                                                /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="ativo"
-                                                        >Ativo</SelectItem
-                                                    >
-                                                    <SelectItem value="inativo"
-                                                        >Inativo</SelectItem
-                                                    >
-                                                </SelectContent>
-                                            </Select>
-                                        </FormControl>
-                                    </FormItem>
-                                </FormField>
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium"
+                                    >Telefone</label
+                                >
+                                <Input v-model="form.telefone" />
                             </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium"
+                                    >Telemóvel</label
+                                >
+                                <Input v-model="form.telemovel" />
+                            </div>
+                        </div>
 
-                            <FormField name="consentimento_rgpd">
-                                <FormItem>
-                                    <FormLabel>Consentimento RGPD</FormLabel>
-                                    <FormControl>
-                                        <RadioGroup
-                                            v-model="form.consentimento_rgpd"
-                                            class="flex gap-4"
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium">Email</label>
+                                <Input
+                                    v-model="form.email"
+                                    placeholder="ex: nome@empresa.pt"
+                                />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-sm font-medium"
+                                    >Estado</label
+                                >
+                                <Select v-model="form.estado">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ativo"
+                                            >Ativo</SelectItem
                                         >
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <RadioGroupItem
-                                                    id="rgpd-sim-ct"
-                                                    value="sim"
-                                                />
-                                                <FormLabel
-                                                    for="rgpd-sim-ct"
-                                                    class="m-0"
-                                                    >Sim</FormLabel
-                                                >
-                                            </div>
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <RadioGroupItem
-                                                    id="rgpd-nao-ct"
-                                                    value="nao"
-                                                />
-                                                <FormLabel
-                                                    for="rgpd-nao-ct"
-                                                    class="m-0"
-                                                    >Não</FormLabel
-                                                >
-                                            </div>
-                                        </RadioGroup>
-                                    </FormControl>
-                                </FormItem>
-                            </FormField>
-
-                            <FormField name="observacoes">
-                                <FormItem>
-                                    <FormLabel>Observações</FormLabel>
-                                    <FormControl
-                                        ><Textarea
-                                            v-model="form.observacoes"
-                                            rows="3"
-                                    /></FormControl>
-                                </FormItem>
-                            </FormField>
-
-                            <div class="flex justify-end gap-2 pt-2">
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    @click="open = false"
-                                    >Cancelar</Button
-                                >
-                                <Button :disabled="loading" type="submit"
-                                    >Guardar</Button
-                                >
+                                        <SelectItem value="inativo"
+                                            >Inativo</SelectItem
+                                        >
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        </form>
-                    </Form>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium"
+                                >Consentimento RGPD</label
+                            >
+                            <RadioGroup
+                                v-model="form.consentimento_rgpd"
+                                class="flex gap-4"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <RadioGroupItem id="rgpd-sim" value="sim" />
+                                    <label
+                                        for="rgpd-sim"
+                                        class="text-sm font-normal cursor-pointer"
+                                        >Sim</label
+                                    >
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <RadioGroupItem id="rgpd-nao" value="nao" />
+                                    <label
+                                        for="rgpd-nao"
+                                        class="text-sm font-normal cursor-pointer"
+                                        >Não</label
+                                    >
+                                </div>
+                            </RadioGroup>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium"
+                                >Observações</label
+                            >
+                            <Textarea v-model="form.observacoes" rows="3" />
+                        </div>
+
+                        <div class="flex justify-end gap-2 pt-4">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                @click="open = false"
+                                >Cancelar</Button
+                            >
+                            <Button :disabled="loading" type="submit"
+                                >Guardar</Button
+                            >
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
         </div>

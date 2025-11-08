@@ -16,7 +16,7 @@ class Proposta extends Model
 		'data_proposta',
 		'validade',
 		'estado',
-		'valor_total',
+		'total',          // ✅ CORRETO: 'total' em vez de 'valor_total'
 		'observacoes',
 	];
 
@@ -24,21 +24,23 @@ class Proposta extends Model
 		'data_proposta' => 'date',
 		'validade' => 'date',
 		'observacoes' => 'array',
+		'total' => 'decimal:2', // ✅ CORRETO
 	];
 
 	public function cliente(): BelongsTo
 	{
 		return $this->belongsTo(Entidade::class, 'cliente_id');
 	}
+
 	public function linhas(): HasMany
 	{
 		return $this->hasMany(PropostaLinha::class);
 	}
 
-	/** Recalcula cache do total (soma de subtotais) */
+	/** Recalcula cache do total (soma de total_linha) */
 	public function recalcularTotal(): void
 	{
-		$this->valor_total = $this->linhas()->sum('subtotal') ?: 0;
+		$this->total = $this->linhas()->sum('total_linha') ?: 0; // ✅ CORRETO: 'total_linha'
 		$this->save();
 	}
 
@@ -60,7 +62,7 @@ class Proposta extends Model
 		return $this->validade ? Carbon::today()->lte($this->validade) : true;
 	}
 
-	/** Próximo número sequencial — pode trocar para uma tabela de sequences se preferir */
+	/** Próximo número sequencial */
 	public static function nextNumero(): int
 	{
 		$ultimo = static::max('numero');

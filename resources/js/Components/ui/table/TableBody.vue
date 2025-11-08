@@ -1,13 +1,11 @@
-<script setup>
-import { cn } from "@/lib/utils";
-
-const props = defineProps({
-  class: { type: null, required: false },
-});
+<script setup lang="ts">
+defineProps<{
+  class?: string
+}>()
 </script>
 
 <template>
-  <tbody :class="cn('[&_tr:last-child]:border-0', props.class)">
+  <tbody :class="$props.class">
     <slot />
   </tbody>
 </template>

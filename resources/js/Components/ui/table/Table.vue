@@ -1,14 +1,13 @@
-<script setup>
-import { cn } from "@/lib/utils";
-
-const props = defineProps({
-  class: { type: null, required: false },
-});
+<!-- resources/js/Components/ui/table/Table.vue -->
+<script setup lang="ts">
+defineProps<{
+  class?: string
+}>()
 </script>
 
 <template>
-  <div class="relative w-full overflow-auto">
-    <table :class="cn('w-full caption-bottom text-sm', props.class)">
+  <div :class="$props.class">
+    <table class="w-full caption-bottom text-sm">
       <slot />
     </table>
   </div>

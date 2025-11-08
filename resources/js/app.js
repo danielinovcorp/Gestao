@@ -16,10 +16,16 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
-        return createApp({ render: () => h(App, props) })
-            .use(plugin)
-            .use(ZiggyVue)
-            .mount(el);
+        const app = createApp({ render: () => h(App, props) });
+
+        app.use(plugin);
+        app.use(ZiggyVue);
+
+        // CORREÇÃO: NÃO TOQUE NO AXIOS → INERTIA JÁ ENVIA CSRF AUTOMATICAMENTE
+        // O Inertia adiciona o token do <meta name="csrf-token"> automaticamente
+        // NÃO É PRECISO CONFIGURAR NADA AQUI
+
+        app.mount(el);
     },
     progress: {
         color: '#4B5563',
