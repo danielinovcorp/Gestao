@@ -9,15 +9,22 @@ class PurchaseOrder extends Model
 {
 	use HasFactory;
 
-	// 🟢 Corrige para o nome real da tabela
 	protected $table = 'encomendas_fornecedores';
+
+	protected $casts = [
+		'data_encomenda' => 'date',
+		'created_at'     => 'datetime',
+		'updated_at'     => 'datetime',
+		'deleted_at'     => 'datetime',
+	];
 
 	protected $fillable = [
 		'numero',
 		'fornecedor_id',
-		'sales_order_id',
+		'origem_id',        // ← CORRIGIDO!
 		'estado',
 		'total',
+		'data_encomenda',
 	];
 
 	public function fornecedor()
@@ -27,8 +34,7 @@ class PurchaseOrder extends Model
 
 	public function origem()
 	{
-		// Encomenda de cliente que deu origem a esta
-		return $this->belongsTo(SalesOrder::class, 'sales_order_id');
+		return $this->belongsTo(SalesOrder::class, 'origem_id'); // ← CORRIGIDO!
 	}
 
 	public function linhas()

@@ -5,16 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class EncomendaFornecedorLinha extends Model
+class EncomendaClienteLinha extends Model
 {
-    protected $table = 'encomenda_fornecedores_linhas';
+    protected $table = 'encomenda_cliente_linhas';
 
     protected $fillable = [
-        'encomenda_fornecedor_id',
+        'encomenda_id',
         'artigo_id',
         'descricao',
         'qtd',
         'preco',
+        'fornecedor_id',
         'iva_id',
         'total_linha'
     ];
@@ -27,11 +28,16 @@ class EncomendaFornecedorLinha extends Model
 
     public function encomenda(): BelongsTo
     {
-        return $this->belongsTo(EncomendaFornecedor::class, 'encomenda_fornecedor_id');
+        return $this->belongsTo(EncomendaCliente::class, 'encomenda_id');
     }
 
     public function artigo(): BelongsTo
     {
         return $this->belongsTo(Artigo::class);
+    }
+
+    public function fornecedor(): BelongsTo
+    {
+        return $this->belongsTo(Entidade::class, 'fornecedor_id');
     }
 }

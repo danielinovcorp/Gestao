@@ -9,34 +9,52 @@ use App\Services\OrderToSupplierOrdersService;
 use App\Services\SequenceService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Models\Artigo;
 
 class SalesOrderController extends Controller
 {
-	public function index()
+	public function index(Request $request)
 	{
-		$orders = SalesOrder::with('cliente')
-			->latest()
-			->paginate(15)
-			->through(fn($o) => [
-				'id'      => $o->id,
-				'data'    => optional($o->data_proposta ?? $o->created_at)->format('Y-m-d'),
-				'numero'  => $o->numero,
-				'validade' => optional($o->validade)->format('Y-m-d'),
-				'cliente' => $o->cliente?->nome,
-				'total'   => (float) $o->total,
-				'estado'  => $o->estado,
-			]);
+		$query = SalesOrder::with('cliente')->latest();
+
+		// Filtros
+		if ($request->filled('search')) {
+			$query->where(function ($q) use ($request) {
+				$q->where('numero', 'like', '%' . $request->search . '%')
+					->orWhereHas('cliente', fn($q) => $q->where('nome', 'like', '%' . $request->search . '%'));
+			});
+		}
+
+		// ESTADO: só aplica se for 'rascunho' ou 'fechado'
+		if ($request->filled('estado') && in_array($request->estado, ['rascunho', 'fechado'])) {
+			$query->where('estado', $request->estado);
+		}
+
+		$orders = $query->paginate(15)->through(fn($o) => [
+			'id'      => $o->id,
+			'data'    => $o->data_proposta?->format('Y-m-d') ?? $o->created_at?->format('Y-m-d'),
+			'numero'  => $o->numero,
+			'validade' => $o->validade?->format('Y-m-d'),
+			'cliente' => $o->cliente?->nome,
+			'total'   => (float) $o->total,
+			'estado'  => $o->estado,
+		]);
 
 		return Inertia::render('Encomendas/Clientes/Index', [
-			'orders' => $orders,
+			'orders'       => $orders,
+			'filters'      => $request->only(['search', 'estado']),
+			'clientes'     => Entidade::where('is_cliente', 1)->orderBy('nome')->get(['id', 'nome']),
+			'fornecedores' => Entidade::where('is_fornecedor', 1)->orderBy('nome')->get(['id', 'nome']),
+			'artigos'      => Artigo::orderBy('referencia')->get(['id', 'referencia', 'nome', 'preco']),
 		]);
 	}
 
 	public function create()
 	{
-		return Inertia::render('Encomendas/Clientes/Form', [
-			'clientes'    => Entidade::where('is_cliente', 1)->orderBy('nome')->get(['id', 'nome']),
+		return Inertia::render('Encomendas/Clientes/Index', [
+			'clientes'     => Entidade::where('is_cliente', 1)->orderBy('nome')->get(['id', 'nome']),
 			'fornecedores' => Entidade::where('is_fornecedor', 1)->orderBy('nome')->get(['id', 'nome']),
+			'artigos'      => Artigo::orderBy('referencia')->get(['id', 'referencia', 'nome', 'preco']),
 		]);
 	}
 
@@ -44,6 +62,7 @@ class SalesOrderController extends Controller
 	{
 		$data = $r->validate([
 			'cliente_id'            => ['required', 'exists:entidades,id'],
+			'data_proposta'         => ['required', 'date'],
 			'validade'              => ['nullable', 'date'],
 			'estado'                => ['required', 'in:rascunho,fechado'],
 			'linhas'                => ['required', 'array', 'min:1'],
@@ -57,34 +76,33 @@ class SalesOrderController extends Controller
 
 		$order = new SalesOrder();
 		$order->cliente_id   = $data['cliente_id'];
+		$order->data_proposta = $data['data_proposta'];
 		$order->validade     = $data['validade'] ?? null;
 		$order->estado       = $data['estado'];
-		$order->total        = 0;
+		$order->total        = 0.0; // ← USE 0.0 em vez de 0
 		$order->save();
 
-		$total = 0;
+		$total = 0.0; // ← USE 0.0 em vez de 0
 		foreach ($data['linhas'] as $l) {
 			$line = new SalesOrderLine([
 				'artigo_id'    => $l['artigo_id'],
 				'descricao'    => $l['descricao'] ?? null,
-				'quantidade'   => $l['quantidade'],
-				'preco'        => $l['preco'],
+				'quantidade'   => (float) $l['quantidade'], // ← CAST PARA FLOAT
+				'preco'        => (float) $l['preco'], // ← CAST PARA FLOAT
 				'iva_id'       => $l['iva_id'] ?? null,
 				'fornecedor_id' => $l['fornecedor_id'] ?? null,
 			]);
 			$line->sales_order_id = $order->id;
-			$line->total = round($line->quantidade * $line->preco, 2); // impostos simplificados por agora
+			$line->total = (float) round($line->quantidade * $line->preco, 2); // ← CAST PARA FLOAT
 			$line->save();
 			$total += $line->total;
 		}
 
 		if ($order->estado === 'fechado') {
-			// usa tua tabela sequences (key, next) com prefixo EC
-			$order->numero        = $seq->next('sales_orders_' . now()->year, 'EC', 4);
-			$order->data_proposta = now();
+			$order->numero = $seq->next('sales_orders_' . now()->year, 'EC', 4);
 		}
 
-		$order->total = $total;
+		$order->total = (float) $total; // ← CAST PARA FLOAT
 		$order->save();
 
 		return redirect()->route('encomendas.clientes.index')->with('success', 'Encomenda guardada.');
@@ -93,25 +111,27 @@ class SalesOrderController extends Controller
 	public function close(SalesOrder $order, SequenceService $seq)
 	{
 		if ($order->estado === 'fechado') {
-			return back()->with('success', 'Já está fechada.');
+			return back()->with('info', 'Encomenda já está fechada.');
 		}
 
-		$order->estado        = 'fechado';
-		$order->data_proposta = now();
-		$order->numero        = $order->numero ?: $seq->next('sales_orders_' . now()->year, 'EC', 4);
-		$order->save();
+		$order->update([
+			'estado'        => 'fechado',
+			'data_proposta' => now(),
+			'numero'        => $seq->next('sales_orders_' . now()->year, 'EC', 4),
+		]);
 
-		return back()->with('success', 'Encomenda fechada.');
+		return back()->with('success', 'Encomenda fechada com sucesso.');
 	}
 
 	public function convertToSupplierOrders(SalesOrder $order, OrderToSupplierOrdersService $svc)
 	{
 		if ($order->estado !== 'fechado') {
-			return back()->with('error', 'Só é possível converter uma encomenda fechada.');
+			return back()->with('error', 'Apenas encomendas fechadas podem ser convertidas.');
 		}
 
 		$count = $svc->convert($order);
-		return back()->with('success', "Geradas {$count} encomendas de fornecedor.");
+
+		return back()->with('success', "Convertido com sucesso! Criadas {$count} encomendas de fornecedor.");
 	}
 
 	public function destroy(SalesOrder $order)
@@ -121,5 +141,28 @@ class SalesOrderController extends Controller
 		}
 		$order->delete();
 		return back()->with('success', 'Encomenda removida.');
+	}
+
+	public function pdf(SalesOrder $order)
+	{
+		$order->load([
+			'cliente:id,nome,morada,codigo_postal,localidade,nif_enc',
+			'linhas' => fn($q) => $q->select([
+				'id',
+				'sales_order_id',
+				'artigo_id',
+				'descricao',
+				'quantidade',
+				'preco',
+				'total',
+				'fornecedor_id'
+			]),
+			'linhas.artigo:id,referencia',
+			'linhas.fornecedor:id,nome'
+		]);
+
+		$pdf = app('dompdf.wrapper');
+		$pdf->loadView('pdf.encomenda-cliente', compact('order'));
+		return $pdf->download('Encomenda-EC-' . $order->numero . '.pdf');
 	}
 }

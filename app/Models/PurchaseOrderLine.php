@@ -9,17 +9,16 @@ class PurchaseOrderLine extends Model
 {
 	use HasFactory;
 
-	// 🟢 Corrige também aqui
 	protected $table = 'encomenda_fornecedor_linhas';
 
 	protected $fillable = [
 		'encomenda_fornecedor_id',
 		'artigo_id',
 		'descricao',
-		'quantidade',
+		'qtd',
 		'preco',
 		'iva_id',
-		'total',
+		'total_linha',
 	];
 
 	public function order()

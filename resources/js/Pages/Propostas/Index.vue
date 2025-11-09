@@ -6,7 +6,7 @@ import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import PropostaDialog from "./PropostaDialog.vue";
-import { format } from "date-fns"; // ADICIONE ISSO
+import { format } from "date-fns";
 
 // ATUALIZE $formatDate PARA TRATAR NULL
 const $formatDate = (date: string | Date | null, fmt = "dd/MM/yyyy") => {
@@ -26,8 +26,9 @@ const props = defineProps<{
             data_proposta: string;
             validade: string;
             cliente: { nome: string };
-            total: number; // ADICIONE AQUI!
+            total: number;
             estado: "rascunho" | "fechado";
+            linhas?: any[]; // Adicione para edição
         }>;
         current_page: number;
         last_page: number;
@@ -51,21 +52,50 @@ function filtrar() {
     }, 500);
 }
 
-const open = ref(false);
+const dialogOpen = ref(false);
+const propostaEditando = ref(null);
+
+function abrirDialog(proposta = null) {
+    propostaEditando.value = proposta;
+    dialogOpen.value = true;
+}
+
 function onSaved() {
-    router.reload({ only: ["propostas"] }); // ← RECARREGA SÓ A LISTA
-    open.value = false;
+    router.reload({ only: ["propostas"] });
+    dialogOpen.value = false;
+    propostaEditando.value = null;
 }
 
 function fechar(id: number) {
     if (!confirm("Tem certeza que deseja fechar esta proposta?")) return;
     router.post(route("propostas.fechar", id), {}, { onSuccess: onSaved });
 }
+
 function pdf(id: number) {
     window.open(route("propostas.pdf", id), "_blank");
 }
+
 function converter(id: number) {
-    router.post(route("propostas.converter", id));
+    if (confirm("Deseja converter esta proposta em uma encomenda?")) {
+        router.post(route("propostas.converter", id), {}, {
+            onSuccess: () => {
+                // O controller redireciona para a encomenda
+            }
+        });
+    }
+}
+
+function editar(proposta: any) {
+    if (proposta.estado === 'fechado') {
+        alert('Propostas fechadas não podem ser editadas.');
+        return;
+    }
+    abrirDialog(proposta);
+}
+
+function eliminar(id: number) {
+    if (!confirm("Tem certeza que deseja eliminar esta proposta?")) return;
+    router.delete(route("propostas.destroy", id), { onSuccess: onSaved });
 }
 </script>
 
@@ -87,54 +117,22 @@ function converter(id: number) {
                 />
                 <Button @click="filtrar">Filtrar</Button>
                 <div class="flex-1"></div>
-                <Button @click="open = true">Nova Proposta</Button>
+                <Button @click="abrirDialog()">Nova Proposta</Button>
             </div>
 
-            <!-- Tabela (EXATAMENTE como Países e Entidades) -->
+            <!-- Tabela -->
             <div class="overflow-hidden rounded-xl border bg-white">
                 <table class="min-w-full">
                     <thead class="bg-slate-50">
                         <tr>
-                            <th
-                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
-                            >
-                                #
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
-                            >
-                                Número
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
-                            >
-                                Data
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
-                            >
-                                Validade
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
-                            >
-                                Cliente
-                            </th>
-                            <th
-                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
-                            >
-                                Total
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
-                            >
-                                Estado
-                            </th>
-                            <th
-                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
-                            >
-                                Ações
-                            </th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-slate-700">#</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-slate-700">Número</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-slate-700">Data</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-slate-700">Validade</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-slate-700">Cliente</th>
+                            <th class="px-4 py-2 text-right text-sm font-semibold text-slate-700">Total</th>
+                            <th class="px-4 py-2 text-left text-sm font-semibold text-slate-700">Estado</th>
+                            <th class="px-4 py-2 text-right text-sm font-semibold text-slate-700">Ações</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-slate-200">
@@ -143,70 +141,57 @@ function converter(id: number) {
                             :key="p.id"
                             class="hover:bg-slate-50"
                         >
-                            <td class="px-4 py-2 text-sm text-slate-600">
-                                {{ p.id }}
-                            </td>
-                            <td class="px-4 py-2 text-sm font-mono font-bold">
-                                #{{ p.numero }}
-                            </td>
+                            <td class="px-4 py-2 text-sm text-slate-600">{{ p.id }}</td>
+                            <td class="px-4 py-2 text-sm font-mono font-bold">#{{ p.numero }}</td>
                             <td class="px-4 py-2 text-sm">
-                                {{
-                                    p.data_proposta
-                                        ? $formatDate(p.data_proposta)
-                                        : "—"
-                                }}
+                                {{ p.data_proposta ? $formatDate(p.data_proposta) : "—" }}
                             </td>
                             <td class="px-4 py-2 text-sm">
                                 {{ p.validade ? $formatDate(p.validade) : "—" }}
                             </td>
-                            <td class="px-4 py-2 text-sm">
-                                {{ p.cliente?.nome }}
+                            <td class="px-4 py-2 text-sm">{{ p.cliente?.nome }}</td>
+                            <td class="px-4 py-2 text-sm text-right font-medium">
+                                {{ p.total ? Number(p.total).toFixed(2) : "0.00" }} €
                             </td>
-
-                            <!-- TOTAL CORRETO -->
-                            <td
-                                class="px-4 py-2 text-sm text-right font-medium"
-                            >
-                                {{
-                                    p.total
-                                        ? Number(p.total).toFixed(2)
-                                        : "0.00"
-                                }}
-                                €
-                            </td>
-
                             <td class="px-4 py-2 text-sm">
                                 <span
                                     :class="{
-                                        'text-amber-600 font-medium':
-                                            p.estado === 'rascunho',
-                                        'text-emerald-600 font-medium':
-                                            p.estado === 'fechado',
+                                        'text-amber-600 font-medium': p.estado === 'rascunho',
+                                        'text-emerald-600 font-medium': p.estado === 'fechado',
                                     }"
                                 >
-                                    {{
-                                        p.estado === "rascunho"
-                                            ? "Rascunho"
-                                            : "Fechado"
-                                    }}
+                                    {{ p.estado === "rascunho" ? "Rascunho" : "Fechado" }}
                                 </span>
                             </td>
-
-                            <!-- AÇÕES -->
                             <td class="px-4 py-2">
                                 <div class="flex gap-2 justify-end">
+                                    <!-- Editar (apenas rascunhos) -->
+                                    <Button
+                                        v-if="p.estado === 'rascunho'"
+                                        size="sm"
+                                        variant="outline"
+                                        @click="editar(p)"
+                                    >
+                                        Editar
+                                    </Button>
+                                    
                                     <Button
                                         size="sm"
                                         variant="secondary"
                                         @click="pdf(p.id)"
-                                        >PDF</Button
                                     >
+                                        PDF
+                                    </Button>
+                                    
                                     <Button
+                                        v-if="p.estado === 'fechado'"
                                         size="sm"
                                         variant="secondary"
                                         @click="converter(p.id)"
-                                        >Converter</Button
                                     >
+                                        Converter
+                                    </Button>
+                                    
                                     <Button
                                         v-if="p.estado === 'rascunho'"
                                         size="sm"
@@ -215,15 +200,21 @@ function converter(id: number) {
                                     >
                                         Fechar
                                     </Button>
+                                    
+                                    <Button
+                                        v-if="p.estado === 'rascunho'"
+                                        size="sm"
+                                        variant="destructive"
+                                        @click="eliminar(p.id)"
+                                    >
+                                        Eliminar
+                                    </Button>
                                 </div>
                             </td>
                         </tr>
 
                         <tr v-if="props.propostas.data.length === 0">
-                            <td
-                                colspan="8"
-                                class="px-4 py-10 text-center text-slate-500"
-                            >
+                            <td colspan="8" class="px-4 py-10 text-center text-slate-500">
                                 Nenhuma proposta encontrada
                             </td>
                         </tr>
@@ -232,14 +223,11 @@ function converter(id: number) {
             </div>
 
             <!-- Paginação -->
-            <div
-                class="flex items-center justify-between text-sm text-slate-600"
-            >
+            <div class="flex items-center justify-between text-sm text-slate-600">
                 <div>Total: {{ props.propostas.total }} propostas</div>
                 <div class="flex items-center gap-4">
                     <div>
-                        Página {{ props.propostas.current_page }} de
-                        {{ props.propostas.last_page }}
+                        Página {{ props.propostas.current_page }} de {{ props.propostas.last_page }}
                     </div>
                     <div class="flex gap-1">
                         <Button
@@ -259,8 +247,9 @@ function converter(id: number) {
 
         <!-- Modal -->
         <PropostaDialog
-            :open="open"
-            :onClose="() => (open = false)"
+            :open="dialogOpen"
+            :proposta="propostaEditando"
+            :onClose="() => { dialogOpen = false; propostaEditando = null; }"
             @saved="onSaved"
         />
     </AuthenticatedLayout>

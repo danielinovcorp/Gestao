@@ -4,12 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Proposta;
 use App\Models\PropostaLinha;
+use App\Models\EncomendaCliente;
 use App\Models\Entidade;
 use App\Models\Artigo;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use App\Models\SalesOrder;
+use App\Models\SalesOrderLine;
+use App\Services\SequenceService;
 
 class PropostaController extends Controller
 {
@@ -40,8 +44,8 @@ class PropostaController extends Controller
 		// GARANTA QUE total É FLOAT
 		$propostas->getCollection()->transform(function ($p) {
 			$p->total = (float) $p->total;
-			$p->data_proposta = $p->data_proposta?->format('Y-m-d') ?: null; // ADICIONE
-			$p->validade = $p->validade?->format('Y-m-d') ?: null; // ADICIONE
+			$p->data_proposta = $p->data_proposta?->format('Y-m-d') ?: null;
+			$p->validade = $p->validade?->format('Y-m-d') ?: null;
 			return $p;
 		});
 
@@ -52,7 +56,21 @@ class PropostaController extends Controller
 	}
 
 	/** --------------------------------------------------------------
-	 *  STORE (criação) - COM NOMES CORRETOS DAS COLUNAS
+	 *  SHOW (para edição)
+	 * -------------------------------------------------------------- */
+	public function show(Proposta $proposta)
+	{
+		$proposta->load([
+			'cliente:id,nome',
+			'linhas.artigo:id,referencia,nome',
+			'linhas.fornecedor:id,nome'
+		]);
+
+		return response()->json($proposta);
+	}
+
+	/** --------------------------------------------------------------
+	 *  STORE (criação)
 	 * -------------------------------------------------------------- */
 	public function store(Request $request)
 	{
@@ -65,8 +83,8 @@ class PropostaController extends Controller
 			'linhas' => ['required', 'array', 'min:1'],
 			'linhas.*.artigo_id'     => ['required', 'exists:artigos,id'],
 			'linhas.*.fornecedor_id' => ['nullable', Rule::exists('entidades', 'id')->where('is_fornecedor', 1)],
-			'linhas.*.quantidade'    => ['required', 'numeric', 'gt:0'],        // ← CORRETO
-			'linhas.*.preco_unitario' => ['required', 'numeric', 'gte:0'],     // ← CORRETO
+			'linhas.*.quantidade'    => ['required', 'numeric', 'gt:0'],
+			'linhas.*.preco_unitario' => ['required', 'numeric', 'gte:0'],
 			'linhas.*.preco_custo'   => ['nullable', 'numeric', 'gte:0'],
 		]);
 
@@ -92,8 +110,8 @@ class PropostaController extends Controller
 					'artigo_id'     => $artigo->id,
 					'fornecedor_id' => $l['fornecedor_id'] ?? null,
 					'descricao'     => $artigo->nome,
-					'qtd'           => $l['quantidade'],        // ← CORRETO
-					'preco'         => $l['preco_unitario'],    // ← CORRETO
+					'qtd'           => $l['quantidade'],
+					'preco'         => $l['preco_unitario'],
 					'preco_custo'   => $l['preco_custo'] ?? null,
 					'total_linha'   => $subtotal,
 				]);
@@ -110,7 +128,7 @@ class PropostaController extends Controller
 	}
 
 	/** --------------------------------------------------------------
-	 *  UPDATE (edição) - COM NOMES CORRETOS DAS COLUNAS
+	 *  UPDATE (edição)
 	 * -------------------------------------------------------------- */
 	public function update(Request $request, Proposta $proposta)
 	{
@@ -157,16 +175,15 @@ class PropostaController extends Controller
 				$subtotal = $l['quantidade'] * $l['preco_unitario'];
 				$total += $subtotal;
 
-				// ✅ CORREÇÃO: Usa os nomes corretos das colunas
 				PropostaLinha::create([
 					'proposta_id'   => $proposta->id,
 					'artigo_id'     => $artigo->id,
 					'fornecedor_id' => $l['fornecedor_id'] ?? null,
-					'descricao'     => $artigo->nome, // ✅ CORRETO
-					'qtd'           => $l['quantidade'], // ✅ CORRETO: 'qtd' em vez de 'quantidade'
-					'preco'         => $l['preco_unitario'], // ✅ CORRETO: 'preco' em vez de 'preco_unitario'
-					'preco_custo'   => $l['preco_custo'] ?? null, // ✅ CORRETO
-					'total_linha'   => $subtotal, // ✅ CORRETO: 'total_linha' em vez de 'subtotal'
+					'descricao'     => $artigo->nome,
+					'qtd'           => $l['quantidade'],
+					'preco'         => $l['preco_unitario'],
+					'preco_custo'   => $l['preco_custo'] ?? null,
+					'total_linha'   => $subtotal,
 				]);
 			}
 
@@ -200,7 +217,7 @@ class PropostaController extends Controller
 		if ($proposta->linhas()->count() === 0) {
 			return back()->with('error', 'Não é possível fechar sem linhas.');
 		}
-		$proposta->fechar();
+		$proposta->update(['estado' => 'fechado']);
 		return back()->with('success', 'Proposta fechada com sucesso.');
 	}
 
@@ -210,8 +227,9 @@ class PropostaController extends Controller
 	public function pdf(Proposta $proposta)
 	{
 		$proposta->load([
-			'cliente:id,nome',
+			'cliente:id,nome,morada,codigo_postal,localidade',
 			'linhas.artigo:id,referencia',
+			'linhas.fornecedor:id,nome'
 		]);
 
 		$view = view('pdf.proposta', [
@@ -226,42 +244,59 @@ class PropostaController extends Controller
 	/** --------------------------------------------------------------
 	 *  CONVERTER EM ENCOMENDA
 	 * -------------------------------------------------------------- */
-	public function converterEncomenda(Proposta $proposta)
+	public function converter($id)
 	{
-		if (
-			!class_exists(\App\Models\EncomendaCliente::class) ||
-			!class_exists(\App\Models\EncomendaClienteLinha::class)
-		) {
-			return back()->with('error', 'Módulo de Encomendas ainda não está disponível.');
+		$proposta = Proposta::with(['linhas', 'cliente'])->findOrFail($id);
+
+		// Verificar se a proposta está fechada
+		if ($proposta->estado !== 'fechado') {
+			return back()->with('error', 'Apenas propostas fechadas podem ser convertidas em encomendas');
 		}
 
-		if ($proposta->linhas()->count() === 0) {
-			return back()->with('error', 'Sem linhas para converter.');
-		}
+		// Calcular total das linhas - USANDO OS CAMPOS CORRETOS
+		$total = $proposta->linhas->sum(function ($linha) {
+			return ($linha->qtd ?? 0) * ($linha->preco ?? 0);
+		});
 
-		$order = \App\Models\EncomendaCliente::create([
-			'numero'       => \App\Models\EncomendaCliente::nextNumero(),
-			'cliente_id'   => $proposta->cliente_id,
-			'estado'       => 'rascunho',
-			'origem_tipo'  => 'proposta',
-			'origem_id'    => $proposta->id,
+		// Criar encomenda
+		$encomenda = SalesOrder::create([
+			'cliente_id' => $proposta->cliente_id,
+			'validade' => $proposta->validade,
+			'total' => $total,
+			'estado' => 'rascunho',
+			'data_proposta' => null,
+			'proposta_id' => $proposta->id,
 		]);
 
-		foreach ($proposta->linhas as $l) {
-			\App\Models\EncomendaClienteLinha::create([
-				'encomenda_cliente_id' => $order->id,
-				'artigo_id'            => $l->artigo_id,
-				'descricao'            => $l->descricao,
-				'referencia'           => $l->artigo->referencia ?? '',
-				'quantidade'           => $l->qtd, // ✅ CORRETO: 'qtd'
-				'preco_unitario'       => $l->preco, // ✅ CORRETO: 'preco'
-				'subtotal'             => $l->total_linha, // ✅ CORRETO: 'total_linha'
+		// Copiar linhas - MAPEAMENTO CORRETO DOS CAMPOS
+		foreach ($proposta->linhas as $linha) {
+			SalesOrderLine::create([
+				'sales_order_id' => $encomenda->id,
+				'artigo_id' => $linha->artigo_id,
+				'descricao' => $linha->descricao,
+				'quantidade' => $linha->qtd, // ← CORRIGIDO: qtd → quantidade
+				'preco' => $linha->preco,
+				'iva_id' => $linha->iva_id,
+				'fornecedor_id' => $linha->fornecedor_id,
+				'total' => $linha->total_linha, // ← CORRIGIDO: total_linha → total
 			]);
 		}
 
-		$order->recalcularTotal();
+		// Recalcular total baseado nas linhas criadas
+		$novoTotal = $encomenda->linhas()->sum('total');
+		$encomenda->update(['total' => $novoTotal]);
 
-		return redirect()->route('encomendas.clientes.edit', $order->id)
-			->with('success', 'Encomenda (rascunho) criada a partir da Proposta.');
+		// Gerar número
+		try {
+			$seq = app(SequenceService::class);
+			$encomenda->numero = $seq->next('sales_orders_' . now()->year, 'EC', 4);
+			$encomenda->save();
+		} catch (\Exception $e) {
+			$encomenda->numero = 'EC-' . now()->year . '-' . str_pad($encomenda->id, 4, '0', STR_PAD_LEFT);
+			$encomenda->save();
+		}
+
+		return redirect()->route('encomendas.clientes.index')
+			->with('success', 'Proposta convertida para encomenda com sucesso');
 	}
 }

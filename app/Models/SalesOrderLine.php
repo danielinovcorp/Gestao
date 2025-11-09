@@ -3,12 +3,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SalesOrderLine extends Model
 {
-	use HasFactory;
-
 	protected $fillable = [
 		'sales_order_id',
 		'artigo_id',
@@ -17,20 +15,26 @@ class SalesOrderLine extends Model
 		'preco',
 		'iva_id',
 		'fornecedor_id',
-		'total',
+		'total'
 	];
 
-	public function order()
+	protected $casts = [
+		'quantidade' => 'float',
+		'preco' => 'float',
+		'total' => 'float',
+	];
+
+	public function salesOrder(): BelongsTo
 	{
 		return $this->belongsTo(SalesOrder::class, 'sales_order_id');
 	}
 
-	public function artigo()
+	public function artigo(): BelongsTo
 	{
 		return $this->belongsTo(Artigo::class);
 	}
 
-	public function fornecedor()
+	public function fornecedor(): BelongsTo
 	{
 		return $this->belongsTo(Entidade::class, 'fornecedor_id');
 	}

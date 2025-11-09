@@ -1,4 +1,11 @@
-import type { ColumnDef } from "@tanstack/vue-table";
+import { h } from "vue";
+
+interface Column {
+    accessorKey?: string;
+    header: string;
+    id?: string;
+    cell?: (ctx: { row: { original: any } }) => any;
+}
 
 type Row = {
     id: number;
@@ -13,33 +20,69 @@ type Row = {
 export const columns = (actions: {
     fechar: (id: number) => void;
     converter: (id: number) => void;
-}): ColumnDef<Row>[] => [
-    { accessorKey: "data", header: "Data" },
-    { accessorKey: "numero", header: "Número" },
-    { accessorKey: "validade", header: "Validade" },
-    { accessorKey: "cliente", header: "Cliente" },
+}): Column[] => [
+    {
+        accessorKey: "data",
+        header: "Data",
+        cell: ({ row }) => h("span", row.original.data || "-"),
+    },
+    {
+        accessorKey: "numero",
+        header: "Número",
+        cell: ({ row }) => h("span", row.original.numero || "-"),
+    },
+    {
+        accessorKey: "validade",
+        header: "Validade",
+        cell: ({ row }) => h("span", row.original.validade || "-"),
+    },
+    {
+        accessorKey: "cliente",
+        header: "Cliente",
+        cell: ({ row }) => h("span", row.original.cliente || "-"),
+    },
     {
         accessorKey: "total",
         header: "Valor Total",
         cell: ({ row }) =>
-            new Intl.NumberFormat("pt-PT", {
-                style: "currency",
-                currency: "EUR",
-            }).format(row.original.total),
+            h(
+                "span",
+                new Intl.NumberFormat("pt-PT", {
+                    style: "currency",
+                    currency: "EUR",
+                }).format(row.original.total),
+            ),
     },
-    { accessorKey: "estado", header: "Estado" },
+    {
+        accessorKey: "estado",
+        header: "Estado",
+        cell: ({ row }) => {
+            const estado = row.original.estado;
+            const colorClass =
+                estado === "fechado"
+                    ? "bg-green-100 text-green-800"
+                    : "bg-yellow-100 text-yellow-800";
+
+            return h(
+                "span",
+                {
+                    class: `px-2 py-1 rounded-full text-xs ${colorClass}`,
+                },
+                estado,
+            );
+        },
+    },
     {
         id: "acoes",
         header: "Ações",
         cell: ({ row }) => {
             const r = row.original;
-            // pequeno render plain; adapte ao teu DataTable (botões, slots, etc.)
             return h("div", { class: "flex gap-2" }, [
                 r.estado === "rascunho"
                     ? h(
                           "button",
                           {
-                              class: "text-indigo-600 hover:underline",
+                              class: "text-indigo-600 hover:underline text-sm",
                               onClick: () => actions.fechar(r.id),
                           },
                           "Fechar",
@@ -47,7 +90,7 @@ export const columns = (actions: {
                     : h(
                           "button",
                           {
-                              class: "text-emerald-600 hover:underline",
+                              class: "text-emerald-600 hover:underline text-sm",
                               onClick: () => actions.converter(r.id),
                           },
                           "Converter",

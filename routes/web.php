@@ -245,7 +245,7 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 	Route::resource('propostas', PropostaController::class)->except(['create', 'edit', 'show']);
 	Route::post('/propostas/{proposta}/fechar',              [PropostaController::class, 'fechar'])->name('propostas.fechar');
 	Route::get('/propostas/{proposta}/pdf',                  [PropostaController::class, 'pdf'])->name('propostas.pdf');
-	Route::post('/propostas/{proposta}/converter-encomenda', [PropostaController::class, 'converterEncomenda'])->name('propostas.converter');
+	Route::post('/propostas/{proposta}/converter-encomenda', [PropostaController::class, 'converter'])->name('propostas.converter');
 
 	// Lookups/AJAX
 	Route::get('/ajax/clientes',     [AjaxLookupController::class, 'clientes'])->name('ajax.clientes');
@@ -319,9 +319,12 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 		Route::patch('clientes/{order}/fechar',   [SalesOrderController::class, 'close'])->name('clientes.close');
 		Route::post('clientes/{order}/converter', [SalesOrderController::class, 'convertToSupplierOrders'])->name('clientes.convert');
 		Route::delete('clientes/{order}',    [SalesOrderController::class, 'destroy'])->name('clientes.destroy');
+		Route::get('clientes/pdf/{order}', [SalesOrderController::class, 'pdf'])->name('clientes.pdf');
 
 		// FORNECEDORES
 		Route::get('fornecedores',           [PurchaseOrderController::class, 'index'])->name('fornecedores.index');
+		Route::patch('fornecedores/{order}/fechar', [PurchaseOrderController::class, 'close'])->name('fornecedores.close');
+		Route::get('fornecedores/{order}/pdf', [PurchaseOrderController::class, 'pdf'])->name('fornecedores.pdf');
 		Route::patch('fornecedores/{purchaseOrder}/marcar-paga', [PurchaseOrderController::class, 'markPaid'])->name('fornecedores.markPaid');
 	});
 

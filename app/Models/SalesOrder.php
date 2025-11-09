@@ -3,39 +3,68 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SalesOrder extends Model
 {
-	use HasFactory;
+	/**
+	 * Nome da tabela no banco
+	 */
+	protected $table = 'sales_orders';
 
+	/**
+	 * Campos que podem ser preenchidos em massa
+	 */
 	protected $fillable = [
 		'numero',
-		'cliente_id',
-		'estado',
 		'data_proposta',
+		'cliente_id',
 		'validade',
 		'total',
+		'estado',
+		'proposta_id', // ← ADICIONADO!
 	];
 
+	/**
+	 * Casts para tipos corretos
+	 */
 	protected $casts = [
 		'data_proposta' => 'datetime',
 		'validade'      => 'date',
+		'total'         => 'float',
+		'proposta_id'   => 'integer',
 	];
 
-	public function cliente()
+	/**
+	 * Relacionamento com Cliente
+	 */
+	public function cliente(): BelongsTo
 	{
 		return $this->belongsTo(Entidade::class, 'cliente_id');
 	}
 
-	public function linhas()
+	/**
+	 * Relacionamento com Linhas da Encomenda
+	 */
+	public function linhas(): HasMany
 	{
-		return $this->hasMany(SalesOrderLine::class);
+		return $this->hasMany(SalesOrderLine::class, 'sales_order_id');
 	}
 
-	public function fornecedorOrders()
+	/**
+	 * Relacionamento com Proposta (origem)
+	 */
+	public function proposta(): BelongsTo
 	{
-		// encomendas de fornecedor geradas a partir desta
-		return $this->hasMany(PurchaseOrder::class, 'sales_order_id');
+		return $this->belongsTo(Proposta::class, 'proposta_id');
+	}
+
+	/**
+	 * (Opcional) Relacionamento reverso com Encomendas Fornecedor
+	 */
+	public function encomendasFornecedor(): HasMany
+	{
+		return $this->hasMany(PurchaseOrder::class, 'origem_id');
 	}
 }
