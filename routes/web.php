@@ -9,8 +9,6 @@ use Inertia\Inertia;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\DocController;
-use App\Http\Controllers\Access\UsersController;
-use App\Http\Controllers\Access\RolesController;
 use App\Http\Controllers\PropostaController;
 use App\Http\Controllers\AjaxLookupController;
 use App\Http\Controllers\OrdemTrabalhoController;
@@ -28,8 +26,9 @@ use App\Http\Controllers\Config\IvaController as ConfigIvaController;
 use App\Http\Controllers\Config\EmpresaController as EmpresaConfigController;
 use App\Http\Controllers\LogsController;
 use App\Http\Controllers\Config\ArtigosController;
-// ✅ ADICIONADO: usa o controller da API de Entidades
 use App\Http\Controllers\Api\EntidadeController as ApiEntidadeController;
+use App\Http\Controllers\Acessos\UtilizadoresController;
+use App\Http\Controllers\Acessos\PermissoesController;
 
 Route::prefix('api/vies')->group(function () {
 	Route::get('/countries', function () {
@@ -274,38 +273,39 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 		Route::post('conta-corrente-clientes', [ClienteMovimentoController::class, 'store'])->name('conta-corrente-clientes.store');
 	});
 
-	// ✅ Gestão de Acessos
-	Route::prefix('gestao-acessos')->name('access.')->group(function () {
+	// Gestão de Acessos
+	Route::prefix('gestao-acessos')->name('access.')->middleware(['auth'])->group(function () {
+
 		// Utilizadores
-		Route::get('/utilizadores',                [UsersController::class, 'index'])
+		Route::get('/utilizadores', [UtilizadoresController::class, 'index'])
 			->middleware('can:access.users.view')->name('users.index');
 
-		Route::post('/utilizadores',               [UsersController::class, 'store'])
+		Route::post('/utilizadores', [UtilizadoresController::class, 'store'])
 			->middleware('can:access.users.create')->name('users.store');
 
-		Route::put('/utilizadores/{user}',         [UsersController::class, 'update'])
+		Route::put('/utilizadores/{user}', [UtilizadoresController::class, 'update'])
 			->middleware('can:access.users.update')->name('users.update');
 
-		Route::delete('/utilizadores/{user}',      [UsersController::class, 'destroy'])
+		Route::delete('/utilizadores/{user}', [UtilizadoresController::class, 'destroy'])
 			->middleware('can:access.users.delete')->name('users.destroy');
 
-		Route::patch('/utilizadores/{user}/toggle', [UsersController::class, 'toggleStatus'])
+		Route::patch('/utilizadores/{user}/toggle', [UtilizadoresController::class, 'toggleStatus'])
 			->middleware('can:access.users.update')->name('users.toggle');
 
-		// Grupos (Roles)
-		Route::get('/permissoes',                  [RolesController::class, 'index'])
+		// Permissões (Grupos)
+		Route::get('/permissoes', [PermissoesController::class, 'index'])
 			->middleware('can:access.roles.view')->name('roles.index');
 
-		Route::post('/permissoes',                 [RolesController::class, 'store'])
+		Route::post('/permissoes', [PermissoesController::class, 'store'])
 			->middleware('can:access.roles.create')->name('roles.store');
 
-		Route::put('/permissoes/{role}',           [RolesController::class, 'update'])
+		Route::put('/permissoes/{role}', [PermissoesController::class, 'update'])
 			->middleware('can:access.roles.update')->name('roles.update');
 
-		Route::patch('/permissoes/{role}/toggle',  [RolesController::class, 'toggleStatus'])
+		Route::patch('/permissoes/{role}/toggle', [PermissoesController::class, 'toggleStatus'])
 			->middleware('can:access.roles.update')->name('roles.toggle');
 
-		Route::delete('/permissoes/{role}',        [RolesController::class, 'destroy'])
+		Route::delete('/permissoes/{role}', [PermissoesController::class, 'destroy'])
 			->middleware('can:access.roles.delete')->name('roles.destroy');
 	});
 

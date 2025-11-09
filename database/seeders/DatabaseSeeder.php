@@ -40,6 +40,7 @@ class DatabaseSeeder extends Seeder
 		$this->call([
 			SequencesSeeder::class,
 			FuncoesContactoSeeder::class,
+			PermissionSeeder::class,
 		]);
 
 		$this->call([
