@@ -14,13 +14,14 @@ class UpdateOrdemTrabalhoRequest extends FormRequest
 	public function rules(): array
 	{
 		return [
-			'cliente_id'     => ['required', 'exists:entidades,id'],
-			'responsavel_id' => ['required', 'exists:users,id'],
-			'descricao'      => ['required', 'string', 'min:3'],
-			'data_inicio'    => ['nullable', 'date'],
-			'data_fim'       => ['nullable', 'date', 'after_or_equal:data_inicio'],
-			'estado'         => ['required', 'in:' . implode(',', OrdemTrabalho::ESTADOS)],
-			'observacoes'    => ['nullable', 'string'],
+			'cliente_id' => ['required', 'exists:entidades,id'],
+			'servico_id' => ['required', 'exists:artigos,id'],
+			'descricao' => ['required', 'string', 'min:3'],
+			'data_inicio' => ['nullable', 'date'],
+			'data_fim' => ['nullable', 'date', 'after_or_equal:data_inicio'],
+			'estado' => ['required', 'in:' . implode(',', array_keys(OrdemTrabalho::ESTADOS))],
+			'prioridade' => ['required', 'in:' . implode(',', array_keys(OrdemTrabalho::PRIORIDADES))],
+			'observacoes' => ['nullable', 'string'],
 		];
 	}
 }

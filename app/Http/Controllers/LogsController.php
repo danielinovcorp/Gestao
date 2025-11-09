@@ -14,8 +14,8 @@ class LogsController extends Controller
 		$userId   = $request->integer('user_id');
 		$menu     = trim((string) $request->get('menu', ''));
 		$acao     = trim((string) $request->get('acao', ''));
-		$fromDate = $request->date('from');  // YYYY-MM-DD
-		$toDate   = $request->date('to');    // YYYY-MM-DD
+		$fromDate = $request->date('from');
+		$toDate   = $request->date('to');
 		$perPage  = (int) ($request->integer('per_page') ?: 15);
 
 		$query = DB::table('activity_log as a')
@@ -26,7 +26,7 @@ class LogsController extends Controller
                 a.description as acao,
                 a.log_name as menu,
                 u.name as utilizador,
-                JSON_UNQUOTE(JSON_EXTRACT(a.properties, '$.ip'))         as ip,
+                JSON_UNQUOTE(JSON_EXTRACT(a.properties, '$.ip')) as ip,
                 JSON_UNQUOTE(JSON_EXTRACT(a.properties, '$.user_agent')) as user_agent
             ")
 			->when($q, function ($qr) use ($q) {
@@ -46,7 +46,6 @@ class LogsController extends Controller
 
 		$items = $query->paginate($perPage)->appends($request->query());
 
-		// opções para filtro de utilizadores e menus
 		$userOptions = DB::table('users')->select('id', 'name')->orderBy('name')->get();
 		$menuOptions = DB::table('activity_log')->select('log_name')->distinct()->orderBy('log_name')->pluck('log_name');
 

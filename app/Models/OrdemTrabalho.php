@@ -4,22 +4,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class OrdemTrabalho extends Model
 {
-	use HasFactory;
+	use HasFactory, LogsActivity;
 
 	protected $table = 'ordens_trabalho';
 
 	protected $fillable = [
 		'numero',
 		'cliente_id',
-		'responsavel_id',
+		'servico_id', // Vem da tabela artigos (serviços)
 		'descricao',
 		'data_inicio',
 		'data_fim',
 		'estado',
 		'observacoes',
+		'prioridade', // baixa, media, alta, urgente
 	];
 
 	protected $casts = [
@@ -27,7 +30,30 @@ class OrdemTrabalho extends Model
 		'data_fim' => 'date',
 	];
 
-	public const ESTADOS = ['pendente', 'em_execucao', 'concluida', 'cancelada'];
+	public const ESTADOS = [
+		'pendente' => 'Pendente',
+		'agendada' => 'Agendada',
+		'em_execucao' => 'Em Execução',
+		'concluida' => 'Concluída',
+		'cancelada' => 'Cancelada'
+	];
+
+	public const PRIORIDADES = [
+		'baixa' => 'Baixa',
+		'media' => 'Média',
+		'alta' => 'Alta',
+		'urgente' => 'Urgente'
+	];
+
+	// Activity Log
+	public function getActivitylogOptions(): LogOptions
+	{
+		return LogOptions::defaults()
+			->logOnly(['numero', 'estado', 'data_inicio', 'data_fim', 'prioridade'])
+			->logOnlyDirty()
+			->setDescriptionForEvent(fn(string $eventName) => "OT {$this->numero} {$eventName}")
+			->dontSubmitEmptyLogs();
+	}
 
 	// Relacionamentos
 	public function cliente()
@@ -35,12 +61,12 @@ class OrdemTrabalho extends Model
 		return $this->belongsTo(Entidade::class, 'cliente_id');
 	}
 
-	public function responsavel()
+	public function servico()
 	{
-		return $this->belongsTo(User::class, 'responsavel_id');
+		return $this->belongsTo(Artigo::class, 'servico_id');
 	}
 
-	// Helper para gerar número incremental do tipo OT0001
+	// Helper para número incremental
 	public static function proximoNumero(): string
 	{
 		$ultimo = static::orderByDesc('id')->value('numero');

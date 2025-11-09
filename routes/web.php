@@ -328,7 +328,13 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 		Route::patch('fornecedores/{purchaseOrder}/marcar-paga', [PurchaseOrderController::class, 'markPaid'])->name('fornecedores.markPaid');
 	});
 
-	Route::resource('ordens', OrdemTrabalhoController::class)->except(['create', 'show', 'edit']);
+	// ORDENS DE TRABALHO
+	Route::resource('ordens', OrdemTrabalhoController::class)
+		->parameters(['ordens' => 'ordem']) // ✅ ADICIONE ESTA LINHA
+		->except(['create', 'show', 'edit']);
+
+	Route::patch('ordens/{ordem}/mudar-estado', [OrdemTrabalhoController::class, 'mudarEstado'])
+		->name('ordens.mudar-estado');
 
 	// ===============================
 	// CONFIGURAÇÕES

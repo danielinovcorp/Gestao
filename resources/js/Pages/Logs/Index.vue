@@ -70,6 +70,7 @@ function fmtDate(dt: string) {
     const d = new Date(dt);
     return d.toLocaleDateString("pt-PT");
 }
+
 function fmtTime(dt: string) {
     const d = new Date(dt);
     return d.toLocaleTimeString("pt-PT", {
@@ -85,9 +86,10 @@ function fmtTime(dt: string) {
     <AuthenticatedLayout>
         <template #header>
             <div class="space-y-2">
-                <h2 class="text-2xl font-semibold leading-tight">Configurações</h2>
+                <h2 class="text-2xl font-semibold leading-tight">
+                    Configurações
+                </h2>
                 <ConfigTabs />
-                <!-- 👉 aqui aparecem os submenus -->
             </div>
         </template>
 
@@ -104,34 +106,36 @@ function fmtTime(dt: string) {
 
                 <div>
                     <Select v-model="user_id">
-                        <SelectTrigger
-                            ><SelectValue placeholder="Utilizador"
-                        /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Utilizador" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem :value="null">Todos</SelectItem>
                             <SelectItem
                                 v-for="u in userOptions"
                                 :key="u.id"
                                 :value="u.id"
-                                >{{ u.name }}</SelectItem
                             >
+                                {{ u.name }}
+                            </SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
                 <div>
                     <Select v-model="menu">
-                        <SelectTrigger
-                            ><SelectValue placeholder="Menu"
-                        /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Menu" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem :value="null">Todos</SelectItem>
                             <SelectItem
                                 v-for="m in menuOptions"
                                 :key="m"
                                 :value="m"
-                                >{{ m || "—" }}</SelectItem
                             >
+                                {{ m || "—" }}
+                            </SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
