@@ -21,11 +21,37 @@ class FornecedorFaturaController extends Controller
 		$this->authorize('viewAny', FornecedorFatura::class);
 
 		$query = FornecedorFatura::query()
-			->with(['fornecedor:id,nome,email', 'encomendaFornecedor:id,numero'])
+			->with(['fornecedor:id,nome,email_enc'])
 			->when($request->filled('estado'), fn($q) => $q->where('estado', $request->estado))
 			->when($request->filled('fornecedor'), fn($q) => $q->where('fornecedor_id', $request->fornecedor))
 			->orderByDesc('data_fatura')
 			->orderByDesc('id');
+
+		// Buscar fornecedores - usar is_fornecedor = 1
+		$fornecedores = Entidade::query()
+			->where('is_fornecedor', 1)
+			->where('estado', 'ativo')
+			->orderBy('nome')
+			->get(['id', 'nome', 'email_enc']);
+
+		// Buscar encomendas - verificar se há encomendas fechadas
+		try {
+			$encomendas = EncomendaFornecedor::query()
+				->where('estado', 'fechado')
+				->orderByDesc('data_encomenda')
+				->limit(200)
+				->get(['id', 'numero']);
+
+			// Se não há encomendas fechadas, buscar as últimas encomendas
+			if ($encomendas->isEmpty()) {
+				$encomendas = EncomendaFornecedor::query()
+					->orderByDesc('data_encomenda')
+					->limit(50)
+					->get(['id', 'numero']);
+			}
+		} catch (\Exception $e) {
+			$encomendas = collect();
+		}
 
 		return Inertia::render('Financeiro/FaturasFornecedor/Index', [
 			'filters' => $request->only(['estado', 'fornecedor']),
@@ -33,22 +59,21 @@ class FornecedorFaturaController extends Controller
 				return [
 					'id' => $f->id,
 					'numero' => $f->numero,
-					'data_fatura' => $f->data_fatura->format('Y-m-d'),
+					'data_fatura' => $f->data_fatura->format('d/m/Y'),
+					'data_vencimento' => $f->data_vencimento?->format('d/m/Y'),
+					'fornecedor_id' => $f->fornecedor_id,
 					'fornecedor' => $f->fornecedor?->nome,
-					'encomenda' => $f->encomendaFornecedor?->numero,
+					'encomenda_fornecedor_id' => $f->encomenda_fornecedor_id,
+					'encomenda' => $f->encomendaFornecedor?->numero ?? null,
 					'valor_total' => number_format($f->valor_total, 2, ',', '.'),
+					'valor_total_raw' => (float) $f->valor_total,
 					'estado' => $f->estado,
 					'documento_url' => $f->documento_url,
 					'comprovativo_url' => $f->comprovativo_url,
 				];
 			}),
-			'fornecedores' => Entidade::query()
-				->where(function ($q) {
-					// Apenas entidades que são Fornecedores (ajusta a tua lógica de tipo)
-					$q->where('tipo', 'fornecedor')->orWhere('tipo', 'both');
-				})
-				->orderBy('nome')
-				->get(['id', 'nome']),
+			'fornecedores' => $fornecedores,
+			'encomendas' => $encomendas,
 		]);
 	}
 

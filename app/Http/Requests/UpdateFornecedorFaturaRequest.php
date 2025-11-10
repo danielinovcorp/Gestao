@@ -26,7 +26,7 @@ class UpdateFornecedorFaturaRequest extends FormRequest
 			'data_fatura' => ['required', 'date'],
 			'data_vencimento' => ['nullable', 'date', 'after_or_equal:data_fatura'],
 			'fornecedor_id' => ['required', 'exists:entidades,id'],
-			'encomenda_fornecedor_id' => ['nullable', 'exists:encomendas_fornecedor,id'],
+			'encomenda_fornecedor_id' => ['nullable', 'exists:encomendas_fornecedores,id'], // Nome correto no plural
 			'valor_total' => ['required', 'numeric', 'min:0'],
 			'estado' => ['required', 'in:pendente,paga'],
 			'documento' => ['nullable', 'file', 'max:10240'],

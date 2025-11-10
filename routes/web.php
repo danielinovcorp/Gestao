@@ -256,9 +256,7 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 
 		// Faturas de Fornecedor
 		Route::get('faturas-fornecedor', [FornecedorFaturaController::class, 'index'])->name('faturas-fornecedor.index');
-		Route::get('faturas-fornecedor/create', [FornecedorFaturaController::class, 'create'])->name('faturas-fornecedor.create');
 		Route::post('faturas-fornecedor', [FornecedorFaturaController::class, 'store'])->name('faturas-fornecedor.store');
-		Route::get('faturas-fornecedor/{fornecedor_fatura}/edit', [FornecedorFaturaController::class, 'edit'])->name('faturas-fornecedor.edit');
 		Route::put('faturas-fornecedor/{fornecedor_fatura}', [FornecedorFaturaController::class, 'update'])->name('faturas-fornecedor.update');
 		Route::delete('faturas-fornecedor/{fornecedor_fatura}', [FornecedorFaturaController::class, 'destroy'])->name('faturas-fornecedor.destroy');
 
@@ -271,6 +269,7 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 		// Conta Corrente Clientes
 		Route::get('conta-corrente-clientes', [ClienteMovimentoController::class, 'index'])->name('conta-corrente-clientes');
 		Route::post('conta-corrente-clientes', [ClienteMovimentoController::class, 'store'])->name('conta-corrente-clientes.store');
+		Route::delete('conta-corrente-clientes/{clienteMovimento}', [ClienteMovimentoController::class, 'destroy'])->name('conta-corrente-clientes.destroy');
 	});
 
 	// Gestão de Acessos

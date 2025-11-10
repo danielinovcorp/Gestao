@@ -11,7 +11,7 @@ class EncomendaFornecedor extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'encomenda_fornecedores';
+    protected $table = 'encomendas_fornecedores'; // Nome correto no plural
 
     protected $fillable = [
         'numero',
