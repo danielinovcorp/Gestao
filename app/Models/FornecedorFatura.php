@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class FornecedorFatura extends Model
 {
-	use SoftDeletes;
+	use HasFactory, SoftDeletes, LogsActivity;
 
 	protected $fillable = [
 		'numero',
@@ -51,5 +54,16 @@ class FornecedorFatura extends Model
 		return $this->comprovativo_path
 			? route('files.private.show', ['path' => $this->comprovativo_path])
 			: null;
+	}
+
+
+	public function getActivitylogOptions(): LogOptions
+	{
+		return LogOptions::defaults()
+			->logOnly(['numero', 'estado', 'valor_total', 'data_fatura', 'fornecedor_id'])
+			->logOnlyDirty()
+			->dontSubmitEmptyLogs()
+			->setDescriptionForEvent(fn(string $eventName) => "Fatura {$this->numero} {$eventName}")
+			->useLogName('faturas-fornecedor');
 	}
 }

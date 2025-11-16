@@ -17,15 +17,17 @@ class DocPolicy
 	}
 	public function create(User $u): bool
 	{
-		return $u->can('criar documentos');
+		return false; // ninguém faz upload manual aqui
 	}
+
 	public function update(User $u, Doc $doc): bool
 	{
-		return $u->can('editar documentos');
+		return false; // não edita
 	}
+
 	public function delete(User $u, Doc $doc): bool
 	{
-		return $u->can('remover documentos');
+		return $u->can('remover documentos'); // só admin
 	}
 	public function download(User $u, Doc $doc): bool
 	{

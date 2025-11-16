@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Services\SequenceService;
+use App\Services\DocService;
 
 class PropostaController extends Controller
 {
@@ -222,9 +223,9 @@ class PropostaController extends Controller
 	}
 
 	/** --------------------------------------------------------------
-	 *  PDF
+	 *  PDF + SALVAR NO ARQUIVO DIGITAL
 	 * -------------------------------------------------------------- */
-	public function pdf(Proposta $proposta)
+	public function pdf(Proposta $proposta, DocService $docService)
 	{
 		$proposta->load([
 			'cliente:id,nome,morada,codigo_postal,localidade',
@@ -232,13 +233,32 @@ class PropostaController extends Controller
 			'linhas.fornecedor:id,nome'
 		]);
 
-		$view = view('pdf.proposta', [
-			'proposta' => $proposta
-		])->render();
+		$view = view('pdf.proposta', ['proposta' => $proposta])->render();
 
 		$dompdf = app('dompdf.wrapper');
 		$dompdf->loadHTML($view)->setPaper('a4', 'portrait');
-		return $dompdf->download('Proposta-' . $proposta->numero . '.pdf');
+
+		// GERA O PDF UMA VEZ SÓ
+		$pdfContent = $dompdf->output();
+
+		// SALVA NO ARQUIVO DIGITAL
+		$docService->storeGenerated(
+			pdfContent: $pdfContent,
+			title: "Proposta #{$proposta->numero}",
+			documentableType: Proposta::class,
+			documentableId: $proposta->id,
+			userId: auth()->id(),
+			meta: [
+				'tags' => ['proposta', 'cliente'],
+				'notes' => "Gerado em " . now()->format('d/m/Y H:i')
+			]
+		);
+
+		// RETORNA O MESMO PDF (sem re-renderizar!)
+		return response($pdfContent, 200, [
+			'Content-Type' => 'application/pdf',
+			'Content-Disposition' => 'attachment; filename="Proposta-' . $proposta->numero . '.pdf"'
+		]);
 	}
 
 	/** --------------------------------------------------------------

@@ -10,6 +10,7 @@ use App\Services\SequenceService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Artigo;
+use App\Services\DocService;
 
 class SalesOrderController extends Controller
 {
@@ -143,26 +144,36 @@ class SalesOrderController extends Controller
 		return back()->with('success', 'Encomenda removida.');
 	}
 
-	public function pdf(SalesOrder $order)
+	public function pdf(SalesOrder $order, DocService $docService)
 	{
 		$order->load([
 			'cliente:id,nome,morada,codigo_postal,localidade,nif_enc',
-			'linhas' => fn($q) => $q->select([
-				'id',
-				'sales_order_id',
-				'artigo_id',
-				'descricao',
-				'quantidade',
-				'preco',
-				'total',
-				'fornecedor_id'
-			]),
 			'linhas.artigo:id,referencia',
 			'linhas.fornecedor:id,nome'
 		]);
 
-		$pdf = app('dompdf.wrapper');
-		$pdf->loadView('pdf.encomenda-cliente', compact('order'));
-		return $pdf->download('Encomenda-EC-' . $order->numero . '.pdf');
+		$view = view('pdf.encomenda-cliente', ['order' => $order])->render();
+
+		$dompdf = app('dompdf.wrapper');
+		$dompdf->loadHTML($view)->setPaper('a4', 'portrait');
+
+		$pdfContent = $dompdf->output();
+
+		$docService->storeGenerated(
+			pdfContent: $pdfContent,
+			title: "Encomenda Cliente #{$order->numero}",
+			documentableType: SalesOrder::class,
+			documentableId: $order->id,
+			userId: auth()->id(),
+			meta: [
+				'tags' => ['encomenda', 'cliente', "cliente:{$order->cliente->nome}"],
+				'notes' => "Gerado em " . now()->format('d/m/Y H:i')
+			]
+		);
+
+		return response($pdfContent, 200, [
+			'Content-Type' => 'application/pdf',
+			'Content-Disposition' => 'attachment; filename="Encomenda-Cliente-' . $order->numero . '.pdf"'
+		]);
 	}
 }

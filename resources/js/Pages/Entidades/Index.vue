@@ -6,26 +6,26 @@ import { useEntidades } from "@/composables/useEntidades";
 import axios from "axios";
 
 // shadcn-vue
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/Components/ui/dialog";
 
 // REMOVIDO: Componentes Form do shadcn que causam conflito
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/Components/ui/textarea";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+} from "@/Components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/Components/ui/radio-group";
 
 /**
  * Props vindas do Inertia (web controller)

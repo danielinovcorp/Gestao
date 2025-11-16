@@ -6,6 +6,7 @@ use App\Models\PurchaseOrder;
 use App\Services\SequenceService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Services\DocService;
 
 class PurchaseOrderController extends Controller
 {
@@ -38,7 +39,7 @@ class PurchaseOrderController extends Controller
 			'fornecedor' => [
 				'nome' => $o->fornecedor?->nome ?? 'Sem Fornecedor'
 			],
-			'origem_numero' => $o->origem?->numero, 
+			'origem_numero' => $o->origem?->numero,
 			'total'         => (float) $o->total,
 			'estado'        => $o->estado,
 			'data'          => $o->data_encomenda?->format('Y-m-d')
@@ -74,27 +75,37 @@ class PurchaseOrderController extends Controller
 	/**
 	 * GERAR PDF
 	 */
-	public function pdf(PurchaseOrder $order)
+	public function pdf(PurchaseOrder $order, DocService $docService)
 	{
 		$order->load([
 			'fornecedor:id,nome,morada,codigo_postal,localidade,nif_enc',
-			'linhas' => fn($q) => $q->select([
-				'id',
-				'encomenda_fornecedor_id',
-				'artigo_id',
-				'descricao',
-				'qtd as quantidade',  // ← CORRIGIDO: qtd → quantidade
-				'preco',
-				'total_linha as total'
-			]),
-			'linhas.artigo:id,referencia'
+			'linhas.artigo:id,referencia',
+			'origem:id,numero'
 		]);
 
-		$pdf = app('dompdf.wrapper');
-		$pdf->loadView('pdf.encomenda-fornecedor', compact('order'));
+		$view = view('pdf.encomenda-fornecedor', ['order' => $order])->render();
 
-		$filename = 'Encomenda-Fornecedor-' . ($order->numero ?? 'rascunho') . '.pdf';
-		return $pdf->download($filename);
+		$dompdf = app('dompdf.wrapper');
+		$dompdf->loadHTML($view)->setPaper('a4', 'portrait');
+
+		$pdfContent = $dompdf->output();
+
+		$docService->storeGenerated(
+			pdfContent: $pdfContent,
+			title: "Encomenda Fornecedor #{$order->numero}",
+			documentableType: PurchaseOrder::class,
+			documentableId: $order->id,
+			userId: auth()->id(),
+			meta: [
+				'tags' => ['encomenda', 'fornecedor', "fornecedor:{$order->fornecedor->nome}"],
+				'notes' => "Gerado em " . now()->format('d/m/Y H:i')
+			]
+		);
+
+		return response($pdfContent, 200, [
+			'Content-Type' => 'application/pdf',
+			'Content-Disposition' => 'attachment; filename="Encomenda-Fornecedor-' . $order->numero . '.pdf"'
+		]);
 	}
 
 	/**

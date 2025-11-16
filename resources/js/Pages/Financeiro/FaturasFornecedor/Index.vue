@@ -2,15 +2,15 @@
 import { Head, router } from "@inertiajs/vue3";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { ref, reactive } from "vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
 import {
     Select,
     SelectTrigger,
     SelectValue,
     SelectContent,
     SelectItem,
-} from "@/components/ui/select";
+} from "@/Components/ui/select";
 import {
     Table,
     TableHeader,
@@ -18,8 +18,8 @@ import {
     TableHead,
     TableBody,
     TableCell,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+} from "@/Components/ui/table";
+import { Badge } from "@/Components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
     Plus,
@@ -33,7 +33,13 @@ import {
 } from "lucide-vue-next";
 
 const props = defineProps<{
-    faturas: { data: any[]; links: any[] };
+    faturas: {
+        data: any[];
+        links: any[];
+        from: number;
+        to: number;
+        total: number;
+    };
     fornecedores: { id: number; nome: string }[];
     encomendas: { id: number; numero: string }[];
     filters: { estado?: string; fornecedor?: string };
@@ -52,10 +58,9 @@ const createForm = reactive({
     data_fatura: new Date().toISOString().split("T")[0],
     data_vencimento: "",
     fornecedor_id: "",
-    encomenda_fornecedor_id: "",
+    encomenda_fornecedor_id: null as number | null,
     valor_total: "",
     estado: "pendente",
-    documento: null as File | null,
 });
 
 // Formulário para edição
@@ -64,20 +69,38 @@ const editForm = reactive({
     data_fatura: "",
     data_vencimento: "",
     fornecedor_id: "",
-    encomenda_fornecedor_id: "",
+    encomenda_fornecedor_id: null as number | null,
     valor_total: "",
     estado: "pendente",
-    documento: null as File | null,
     comprovativo: null as File | null,
 });
+
+// === FUNÇÃO SEGURA PARA CONVERTER d/m/Y → Y-m-d ===
+function toIsoDate(dateStr: string | null | undefined): string {
+    if (!dateStr || typeof dateStr !== "string") return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+
+    const parts = dateStr.split("/");
+    if (parts.length !== 3) return "";
+
+    const [day, month, year] = parts.map((p) => p.trim());
+    const d = parseInt(day, 10);
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+
+    if (isNaN(d) || isNaN(m) || isNaN(y) || d < 1 || d > 31 || m < 1 || m > 12 || y < 1000) {
+        return "";
+    }
+
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
 
 function applyFilters() {
     router.get(
         route("financeiro.faturas-fornecedor.index"),
         {
             estado: estado.value !== "all" ? estado.value : undefined,
-            fornecedor:
-                fornecedor.value !== "all" ? fornecedor.value : undefined,
+            fornecedor: fornecedor.value !== "all" ? fornecedor.value : undefined,
         },
         { preserveState: true, replace: true },
     );
@@ -96,41 +119,38 @@ function startCreate() {
         data_fatura: new Date().toISOString().split("T")[0],
         data_vencimento: "",
         fornecedor_id: "",
-        encomenda_fornecedor_id: "",
+        encomenda_fornecedor_id: null,
         valor_total: "",
         estado: "pendente",
-        documento: null,
     });
+    comprovativoFile.value = null;
 }
 
 function cancelCreate() {
     creating.value = false;
+    comprovativoFile.value = null;
 }
 
 function startEdit(fatura: any) {
     editingId.value = fatura.id;
     Object.assign(editForm, {
-        numero: fatura.numero,
-        data_fatura: fatura.data_fatura,
-        data_vencimento: fatura.data_vencimento || "",
+        numero: fatura.numero || "",
+        data_fatura: fatura.data_fatura ? toIsoDate(fatura.data_fatura) || new Date().toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+        data_vencimento: fatura.data_vencimento ? toIsoDate(fatura.data_vencimento) : "",
         fornecedor_id: String(fatura.fornecedor_id),
-        encomenda_fornecedor_id: fatura.encomenda_fornecedor_id
-            ? String(fatura.encomenda_fornecedor_id)
-            : "",
-        valor_total: fatura.valor_total_raw
-            ? String(fatura.valor_total_raw)
-            : "",
-        estado: fatura.estado,
-        documento: null,
+        encomenda_fornecedor_id: fatura.encomenda_fornecedor_id ? Number(fatura.encomenda_fornecedor_id) : null,
+        valor_total: fatura.valor_total_raw ? String(fatura.valor_total_raw) : "",
+        estado: fatura.estado || "pendente",
         comprovativo: null,
     });
 }
 
 function cancelEdit() {
     editingId.value = null;
+    editForm.comprovativo = null;
 }
 
-function onEstadoChange(newEstado: string, isEdit = false) {
+function onEstadoChange(newEstado: string) {
     if (newEstado === "paga") {
         showComprovativoDialog.value = true;
     }
@@ -139,28 +159,14 @@ function onEstadoChange(newEstado: string, isEdit = false) {
 function submitCreate() {
     const formData = new FormData();
 
-    // Converter valor "none" para null
-    const encomendaId =
-        createForm.encomenda_fornecedor_id === "none"
-            ? ""
-            : createForm.encomenda_fornecedor_id;
-
+    formData.append("data_fatura", toIsoDate(createForm.data_fatura));
+    formData.append("data_vencimento", toIsoDate(createForm.data_vencimento));
     formData.append("numero", createForm.numero);
-    formData.append("data_fatura", createForm.data_fatura);
-    formData.append("data_vencimento", createForm.data_vencimento || "");
     formData.append("fornecedor_id", createForm.fornecedor_id);
-    formData.append("encomenda_fornecedor_id", encomendaId);
-    formData.append(
-        "valor_total",
-        createForm.valor_total
-            ? String(createForm.valor_total).replace(",", ".")
-            : "0",
-    );
+    formData.append("encomenda_fornecedor_id", createForm.encomenda_fornecedor_id?.toString() || "");
+    formData.append("valor_total", createForm.valor_total ? String(createForm.valor_total).replace(",", ".") : "0");
     formData.append("estado", createForm.estado);
 
-    if (createForm.documento) {
-        formData.append("documento", createForm.documento);
-    }
     if (comprovativoFile.value) {
         formData.append("comprovativo", comprovativoFile.value);
     }
@@ -172,88 +178,61 @@ function submitCreate() {
             comprovativoFile.value = null;
             showComprovativoDialog.value = false;
         },
-        onError: (errors) => {
-            console.log("Erros:", errors);
-        },
+        onError: (errors) => console.log("Erros:", errors),
     });
 }
 
 function submitEdit() {
     if (!editingId.value) return;
 
+    if (!editForm.numero || !editForm.data_fatura || !editForm.fornecedor_id || !editForm.valor_total) {
+        alert("Preencha todos os campos obrigatórios: Número, Data, Fornecedor e Valor.");
+        return;
+    }
+
     const formData = new FormData();
-
-    // Converter valor "none" para null
-    const encomendaId =
-        editForm.encomenda_fornecedor_id === "none"
-            ? ""
-            : editForm.encomenda_fornecedor_id;
-
+    formData.append("data_fatura", toIsoDate(editForm.data_fatura));
+    formData.append("data_vencimento", toIsoDate(editForm.data_vencimento));
     formData.append("numero", editForm.numero);
-    formData.append("data_fatura", editForm.data_fatura);
-    formData.append("data_vencimento", editForm.data_vencimento || "");
     formData.append("fornecedor_id", editForm.fornecedor_id);
-    formData.append("encomenda_fornecedor_id", encomendaId);
-    formData.append(
-        "valor_total",
-        editForm.valor_total
-            ? String(editForm.valor_total).replace(",", ".")
-            : "0",
-    );
+    formData.append("encomenda_fornecedor_id", editForm.encomenda_fornecedor_id !== null ? String(editForm.encomenda_fornecedor_id) : "");
+    formData.append("valor_total", editForm.valor_total ? String(editForm.valor_total).replace(",", ".") : "0");
     formData.append("estado", editForm.estado);
     formData.append("_method", "put");
 
-    if (editForm.documento) {
-        formData.append("documento", editForm.documento);
-    }
     if (editForm.comprovativo) {
         formData.append("comprovativo", editForm.comprovativo);
     }
 
-    router.post(
-        route("financeiro.faturas-fornecedor.update", editingId.value),
-        formData,
-        {
-            preserveScroll: true,
-            onSuccess: () => {
-                editingId.value = null;
-            },
-            onError: (errors) => {
-                console.log("Erros:", errors);
-            },
+    router.post(route("financeiro.faturas-fornecedor.update", editingId.value), formData, {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingId.value = null;
+            editForm.comprovativo = null;
         },
-    );
+        onError: (errors) => console.log("Erros:", errors),
+    });
 }
 
 function deleteFatura(id: number) {
     if (confirm("Tem certeza que deseja remover esta fatura?")) {
-        router.delete(route("financeiro.faturas-fornecedor.destroy", id), {
-            preserveScroll: true,
-        });
-    }
-}
-
-function onDocumentoChange(event: Event, isEdit = false) {
-    const target = event.target as HTMLInputElement;
-    if (target.files && target.files[0]) {
-        if (isEdit) {
-            editForm.documento = target.files[0];
-        } else {
-            createForm.documento = target.files[0];
-        }
+        router.delete(route("financeiro.faturas-fornecedor.destroy", id), { preserveScroll: true });
     }
 }
 
 function onComprovativoChange(event: Event) {
     const target = event.target as HTMLInputElement;
-    if (target.files && target.files[0]) {
-        comprovativoFile.value = target.files[0];
+    if (target.files?.[0]) {
+        if (editingId.value) {
+            editForm.comprovativo = target.files[0];
+        } else {
+            comprovativoFile.value = target.files[0];
+        }
     }
 }
 
 function confirmComprovativo() {
     showComprovativoDialog.value = false;
-    // Continua com o submit normal
     if (editingId.value) {
         submitEdit();
     } else {
@@ -263,11 +242,12 @@ function confirmComprovativo() {
 
 function cancelComprovativo() {
     showComprovativoDialog.value = false;
-    // Reverte o estado para pendente
     if (editingId.value) {
         editForm.estado = "pendente";
+        editForm.comprovativo = null;
     } else {
         createForm.estado = "pendente";
+        comprovativoFile.value = null;
     }
 }
 </script>
@@ -276,25 +256,15 @@ function cancelComprovativo() {
     <Head title="Faturas Fornecedores" />
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1
-                        class="text-2xl font-semibold leading-tight text-gray-800"
-                    >
-                        Faturas Fornecedores
-                    </h1>
-                    <p class="text-sm text-gray-600 mt-1">
-                        Gerencie as faturas dos fornecedores
-                    </p>
-                </div>
-            </div>
+            <h1 class="text-2xl font-semibold leading-tight text-gray-800">
+                Faturas Fornecedores
+            </h1>
         </template>
 
         <div class="px-6 md:px-8 py-6 space-y-6">
             <!-- Filtros -->
             <div class="rounded-2xl border bg-white p-4 shadow-sm">
                 <div class="flex flex-col lg:flex-row gap-4">
-                    <!-- Filtro Estado -->
                     <div class="w-full lg:w-48">
                         <Select
                             v-model="estado"
@@ -313,7 +283,6 @@ function cancelComprovativo() {
                         </Select>
                     </div>
 
-                    <!-- Filtro Fornecedor -->
                     <div class="w-full lg:w-64">
                         <Select
                             v-model="fornecedor"
@@ -339,7 +308,6 @@ function cancelComprovativo() {
                         </Select>
                     </div>
 
-                    <!-- Ações -->
                     <div class="flex items-center gap-2">
                         <Button
                             variant="outline"
@@ -362,8 +330,8 @@ function cancelComprovativo() {
                 </div>
             </div>
 
-            <!-- Tabela -->
-            <div class="rounded-2xl border bg-white shadow-sm">
+            <!-- TABELA NO PADRÃO -->
+            <div class="overflow-hidden rounded-xl border bg-white shadow-sm">
                 <div class="p-4 border-b">
                     <h3 class="text-lg font-medium text-gray-900">
                         Lista de Faturas
@@ -373,105 +341,124 @@ function cancelComprovativo() {
                     </h3>
                 </div>
 
-                <Table>
-                    <TableHeader>
-                        <TableRow class="hover:bg-transparent">
-                            <TableHead class="w-[120px]">Data</TableHead>
-                            <TableHead class="w-[140px]">Número</TableHead>
-                            <TableHead class="w-[200px]">Fornecedor</TableHead>
-                            <TableHead>Encomenda</TableHead>
-                            <TableHead>Documento</TableHead>
-                            <TableHead class="text-right w-[120px]"
-                                >Valor Total</TableHead
+                <table class="min-w-full">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
                             >
-                            <TableHead class="w-[100px]">Estado</TableHead>
-                            <TableHead class="w-[120px]">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                                Data
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Número
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Fornecedor
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Encomenda
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Documento
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Valor
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Estado
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Ações
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
                         <!-- Linha de criação -->
-                        <TableRow v-if="creating" class="bg-blue-50">
-                            <TableCell>
+                        <tr v-if="creating" class="bg-blue-50">
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.data_fatura"
                                     type="date"
                                     class="h-9"
                                 />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.numero"
                                     placeholder="Número"
                                     class="h-9"
                                 />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Select v-model="createForm.fornecedor_id">
-                                    <SelectTrigger class="h-9">
-                                        <SelectValue placeholder="Fornecedor" />
-                                    </SelectTrigger>
+                                    <SelectTrigger class="h-9"
+                                        ><SelectValue placeholder="Fornecedor"
+                                    /></SelectTrigger>
                                     <SelectContent class="max-h-72">
                                         <SelectItem
                                             v-for="f in fornecedores"
                                             :key="f.id"
                                             :value="String(f.id)"
+                                            >{{ f.nome }}</SelectItem
                                         >
-                                            {{ f.nome }}
-                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Select
                                     v-model="createForm.encomenda_fornecedor_id"
                                 >
-                                    <SelectTrigger class="h-9">
-                                        <SelectValue
-                                            placeholder="Encomenda (opcional)"
-                                        />
-                                    </SelectTrigger>
+                                    <SelectTrigger class="h-9"
+                                        ><SelectValue placeholder="Encomenda"
+                                    /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value=""
+                                        <SelectItem :value="null"
                                             >Nenhuma</SelectItem
                                         >
                                         <SelectItem
                                             v-for="e in encomendas"
                                             :key="e.id"
-                                            :value="String(e.id)"
+                                            :value="e.id"
+                                            >{{ e.numero }}</SelectItem
                                         >
-                                            {{ e.numero }}
-                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </TableCell>
-                            <TableCell>
-                                <Input
-                                    type="file"
-                                    @change="onDocumentoChange($event, false)"
-                                    class="h-9"
-                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2 text-sm text-slate-500">
+                                PDF gerado automaticamente
+                            </td>
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.valor_total"
                                     type="number"
                                     step="0.01"
-                                    min="0"
-                                    placeholder="0,00"
                                     class="h-9 text-right"
                                 />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Select
                                     v-model="createForm.estado"
                                     @update:model-value="
-                                        (val) => onEstadoChange(val, false)
+                                        (v) => onEstadoChange(v, false)
                                     "
                                 >
-                                    <SelectTrigger class="h-9">
-                                        <SelectValue />
-                                    </SelectTrigger>
+                                    <SelectTrigger class="h-9"
+                                        ><SelectValue
+                                    /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="pendente"
                                             >Pendente</SelectItem
@@ -481,9 +468,9 @@ function cancelComprovativo() {
                                         >
                                     </SelectContent>
                                 </Select>
-                            </TableCell>
-                            <TableCell>
-                                <div class="flex gap-2">
+                            </td>
+                            <td class="px-4 py-2">
+                                <div class="flex gap-2 justify-end">
                                     <Button
                                         size="sm"
                                         @click="submitCreate"
@@ -500,90 +487,52 @@ function cancelComprovativo() {
                                         size="sm"
                                         variant="outline"
                                         @click="cancelCreate"
-                                    >
-                                        <X class="h-4 w-4" />
-                                    </Button>
+                                        ><X class="h-4 w-4"
+                                    /></Button>
                                 </div>
-                            </TableCell>
-                        </TableRow>
+                            </td>
+                        </tr>
 
-                        <!-- Estado vazio -->
-                        <TableRow
-                            v-if="faturas.data.length === 0 && !creating"
-                            class="hover:bg-transparent"
-                        >
-                            <TableCell>
-                                <Select
-                                    v-model="createForm.encomenda_fornecedor_id"
-                                >
-                                    <SelectTrigger class="h-9">
-                                        <SelectValue
-                                            :placeholder="
-                                                encomendas.length > 0
-                                                    ? 'Encomenda (opcional)'
-                                                    : 'Sem encomendas'
-                                            "
-                                        />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none"
-                                            >Nenhuma encomenda</SelectItem
-                                        >
-                                        <SelectItem
-                                            v-for="e in encomendas"
-                                            :key="e.id"
-                                            :value="String(e.id)"
-                                        >
-                                            {{ e.numero }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p
-                                    v-if="encomendas.length === 0"
-                                    class="text-xs text-gray-500 mt-1"
-                                >
-                                    Nenhuma encomenda de fornecedor disponível
-                                </p>
-                            </TableCell>
-                        </TableRow>
-
-                        <!-- Linhas de faturas -->
-                        <TableRow
+                        <!-- Linhas normais -->
+                        <tr
                             v-for="fatura in faturas.data"
                             :key="fatura.id"
-                            class="group hover:bg-gray-50"
+                            class="group hover:bg-slate-50"
                             :class="{ 'bg-yellow-50': editingId === fatura.id }"
                         >
-                            <!-- Modo visualização -->
                             <template v-if="editingId !== fatura.id">
-                                <TableCell class="font-medium">
+                                <td class="px-4 py-2 text-sm text-slate-600">
                                     {{ fatura.data_fatura }}
-                                </TableCell>
-                                <TableCell class="font-medium">
+                                </td>
+                                <td class="px-4 py-2 text-sm font-medium">
                                     {{ fatura.numero }}
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2 text-sm">
                                     {{ fatura.fornecedor }}
-                                </TableCell>
-                                <TableCell>
-                                    {{ fatura.encomenda || "-" }}
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2 text-sm">
+                                    {{ fatura.encomenda || "—" }}
+                                </td>
+                                <td class="px-4 py-2">
                                     <a
                                         v-if="fatura.documento_url"
                                         :href="fatura.documento_url"
                                         target="_blank"
-                                        class="flex items-center gap-1 text-blue-600 hover:underline"
+                                        class="text-blue-600 hover:underline text-sm flex items-center gap-1"
                                     >
                                         <FileText class="h-4 w-4" />
-                                        Abrir
+                                        Fatura #{{ fatura.numero }}.pdf
                                     </a>
-                                    <span v-else class="text-gray-400">-</span>
-                                </TableCell>
-                                <TableCell class="text-right font-medium">
+                                    <span v-else class="text-slate-400 text-sm"
+                                        >—</span
+                                    >
+                                </td>
+                                <td
+                                    class="px-4 py-2 text-sm text-right font-medium"
+                                >
                                     {{ fatura.valor_total }} €
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2">
                                     <Badge
                                         :variant="
                                             fatura.estado === 'paga'
@@ -592,8 +541,8 @@ function cancelComprovativo() {
                                         "
                                         :class="
                                             fatura.estado === 'paga'
-                                                ? 'bg-green-100 text-green-800 hover:bg-green-100'
-                                                : 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+                                                ? 'bg-green-100 text-green-800'
+                                                : 'bg-amber-100 text-amber-800'
                                         "
                                     >
                                         {{
@@ -602,128 +551,102 @@ function cancelComprovativo() {
                                                 : "Pendente"
                                         }}
                                     </Badge>
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2">
                                     <div
-                                        class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
                                         <Button
                                             size="sm"
                                             variant="outline"
                                             @click="startEdit(fatura)"
-                                        >
-                                            <Edit class="h-4 w-4" />
-                                        </Button>
+                                            ><Edit class="h-4 w-4"
+                                        /></Button>
                                         <Button
                                             size="sm"
                                             variant="outline"
                                             class="text-red-600 hover:text-red-700"
                                             @click="deleteFatura(fatura.id)"
-                                        >
-                                            <Trash2 class="h-4 w-4" />
-                                        </Button>
+                                            ><Trash2 class="h-4 w-4"
+                                        /></Button>
                                     </div>
-                                </TableCell>
+                                </td>
                             </template>
 
                             <!-- Modo edição -->
                             <template v-else>
-                                <TableCell>
+                                <td class="px-4 py-2">
                                     <Input
                                         v-model="editForm.data_fatura"
                                         type="date"
                                         class="h-9"
                                     />
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2">
                                     <Input
                                         v-model="editForm.numero"
                                         placeholder="Número"
                                         class="h-9"
                                     />
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2">
                                     <Select v-model="editForm.fornecedor_id">
-                                        <SelectTrigger class="h-9">
-                                            <SelectValue />
-                                        </SelectTrigger>
+                                        <SelectTrigger class="h-9"
+                                            ><SelectValue
+                                        /></SelectTrigger>
                                         <SelectContent class="max-h-72">
                                             <SelectItem
                                                 v-for="f in fornecedores"
                                                 :key="f.id"
                                                 :value="String(f.id)"
+                                                >{{ f.nome }}</SelectItem
                                             >
-                                                {{ f.nome }}
-                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2">
                                     <Select
                                         v-model="
                                             editForm.encomenda_fornecedor_id
                                         "
                                     >
-                                        <SelectTrigger class="h-9">
-                                            <SelectValue />
-                                        </SelectTrigger>
+                                        <SelectTrigger class="h-9"
+                                            ><SelectValue
+                                        /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none"
+                                            <SelectItem :value="null"
                                                 >Nenhuma</SelectItem
                                             >
                                             <SelectItem
                                                 v-for="e in encomendas"
                                                 :key="e.id"
-                                                :value="String(e.id)"
+                                                :value="e.id"
+                                                >{{ e.numero }}</SelectItem
                                             >
-                                                {{ e.numero }}
-                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
-                                </TableCell>
-                                <TableCell>
-                                    <Input
-                                        type="file"
-                                        @change="
-                                            onDocumentoChange($event, true)
-                                        "
-                                        class="h-9"
-                                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                    />
-                                    <div
-                                        v-if="fatura.documento_url"
-                                        class="text-xs text-gray-500 mt-1"
-                                    >
-                                        Documento atual:
-                                        <a
-                                            :href="fatura.documento_url"
-                                            target="_blank"
-                                            class="text-blue-600 hover:underline"
-                                        >
-                                            Ver
-                                        </a>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2 text-sm text-slate-500">
+                                    PDF gerado automaticamente
+                                </td>
+                                <td class="px-4 py-2">
                                     <Input
                                         v-model="editForm.valor_total"
                                         type="number"
                                         step="0.01"
-                                        min="0"
-                                        placeholder="0,00"
                                         class="h-9 text-right"
                                     />
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td class="px-4 py-2">
                                     <Select
                                         v-model="editForm.estado"
                                         @update:model-value="
-                                            (val) => onEstadoChange(val, true)
+                                            (v) => onEstadoChange(v, true)
                                         "
                                     >
-                                        <SelectTrigger class="h-9">
-                                            <SelectValue />
-                                        </SelectTrigger>
+                                        <SelectTrigger class="h-9"
+                                            ><SelectValue
+                                        /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="pendente"
                                                 >Pendente</SelectItem
@@ -733,9 +656,9 @@ function cancelComprovativo() {
                                             >
                                         </SelectContent>
                                     </Select>
-                                </TableCell>
-                                <TableCell>
-                                    <div class="flex gap-2">
+                                </td>
+                                <td class="px-4 py-2">
+                                    <div class="flex gap-2 justify-end">
                                         <Button
                                             size="sm"
                                             @click="submitEdit"
@@ -752,36 +675,48 @@ function cancelComprovativo() {
                                             size="sm"
                                             variant="outline"
                                             @click="cancelEdit"
-                                        >
-                                            <X class="h-4 w-4" />
-                                        </Button>
+                                            ><X class="h-4 w-4"
+                                        /></Button>
                                     </div>
-                                </TableCell>
+                                </td>
                             </template>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                        </tr>
+
+                        <!-- Sem resultados -->
+                        <tr v-if="faturas.data.length === 0 && !creating">
+                            <td
+                                colspan="8"
+                                class="px-4 py-10 text-center text-slate-500"
+                            >
+                                Nenhuma fatura encontrada
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
 
                 <!-- Paginação -->
                 <div
-                    v-if="faturas.links && faturas.links.length > 3"
-                    class="p-4 border-t flex items-center justify-between"
+                    v-if="faturas.links?.length > 3"
+                    class="p-4 border-t flex items-center justify-between text-sm"
                 >
-                    <p class="text-sm text-gray-700">
-                        Mostrando {{ faturas.data.length }} registros
-                    </p>
+                    <div class="text-slate-600">
+                        Mostrando {{ faturas.from }}–{{ faturas.to }} de
+                        {{ faturas.total }}
+                    </div>
                     <div class="flex gap-1">
                         <Button
                             v-for="link in faturas.links"
                             :key="link.label"
-                            variant="outline"
-                            size="sm"
                             :disabled="!link.url"
-                            :class="{
-                                'bg-primary text-primary-foreground':
-                                    link.active,
-                            }"
                             @click="router.get(link.url)"
+                            :class="[
+                                link.active
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-white border hover:bg-slate-50',
+                                !link.url
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '',
+                            ]"
                             v-html="link.label"
                         />
                     </div>
@@ -789,7 +724,7 @@ function cancelComprovativo() {
             </div>
         </div>
 
-        <!-- Modal simples para comprovativo -->
+        <!-- Modal Comprovativo -->
         <div
             v-if="showComprovativoDialog"
             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
@@ -801,7 +736,6 @@ function cancelComprovativo() {
                 <p class="text-gray-600 mb-4">
                     Pretende enviar o comprovativo ao Fornecedor?
                 </p>
-
                 <div class="space-y-4">
                     <Label for="comprovativo">Anexar comprovativo:</Label>
                     <Input
@@ -815,7 +749,6 @@ function cancelComprovativo() {
                         automaticamente.
                     </p>
                 </div>
-
                 <div class="flex justify-end gap-3 mt-6">
                     <Button variant="outline" @click="cancelComprovativo"
                         >Cancelar</Button

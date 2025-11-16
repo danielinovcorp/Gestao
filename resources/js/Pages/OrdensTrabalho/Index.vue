@@ -22,14 +22,19 @@ import {
 // Props vindas do controller
 const props = defineProps<{
     ordens: any;
-    filters: { 
-        search?: string; 
-        estado?: string; 
+    filters: {
+        search?: string;
+        estado?: string;
         cliente_id?: number;
         prioridade?: string;
     };
     clientes: Array<{ id: number; nome: string }>;
-    servicos: Array<{ id: number; nome: string; descricao?: string; preco?: number }>;
+    servicos: Array<{
+        id: number;
+        nome: string;
+        descricao?: string;
+        preco?: number;
+    }>;
     estados: Record<string, string>;
     prioridades: Record<string, string>;
     estatisticas: {
@@ -50,11 +55,11 @@ const prioridade = ref(props.filters.prioridade || "");
 watch([search, estado, cliente_id, prioridade], () => {
     router.get(
         route("ordens.index"),
-        { 
-            search: search.value, 
+        {
+            search: search.value,
             estado: estado.value,
             cliente_id: cliente_id.value,
-            prioridade: prioridade.value
+            prioridade: prioridade.value,
         },
         { preserveState: true, replace: true },
     );
@@ -74,6 +79,21 @@ const form = useForm({
     estado: "pendente",
     prioridade: "media",
     observacoes: "",
+});
+
+// Computed para inputs de data (converte ISO ↔ YYYY-MM-DD)
+const dataInicioInput = computed({
+    get: () => (form.data_inicio ? form.data_inicio.split("T")[0] : ""),
+    set: (val: string) => {
+        form.data_inicio = val ? `${val}T00:00:00.000000Z` : "";
+    },
+});
+
+const dataFimInput = computed({
+    get: () => (form.data_fim ? form.data_fim.split("T")[0] : ""),
+    set: (val: string) => {
+        form.data_fim = val ? `${val}T00:00:00.000000Z` : "";
+    },
 });
 
 function openCreate() {
@@ -123,7 +143,17 @@ function removeRow(id: number) {
     router.delete(route("ordens.destroy", id));
 }
 
-// Helper para badge de prioridade
+// ----------------------- Helpers -----------------------
+
+// Formatar data para exibição: 10/11/2025
+function formatDate(isoDate: string | null): string {
+    if (!isoDate) return "—";
+    const [date] = isoDate.split("T");
+    const [year, month, day] = date.split("-");
+    return `${day}/${month}/${year}`;
+}
+
+// Badge de prioridade
 function getPrioridadeBadge(prioridade: string) {
     const classes = {
         urgente: "bg-red-100 text-red-800 border-red-200",
@@ -134,7 +164,7 @@ function getPrioridadeBadge(prioridade: string) {
     return classes[prioridade] || "bg-gray-100 text-gray-800 border-gray-200";
 }
 
-// Helper para badge de estado
+// Badge de estado
 function getEstadoBadge(estado: string) {
     const classes = {
         pendente: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -148,9 +178,9 @@ function getEstadoBadge(estado: string) {
 
 // Formatar preço
 function formatPreco(preco: number) {
-    return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR'
+    return new Intl.NumberFormat("pt-PT", {
+        style: "currency",
+        currency: "EUR",
     }).format(preco);
 }
 </script>
@@ -168,30 +198,52 @@ function formatPreco(preco: number) {
         <div class="p-6 space-y-6">
             <!-- Estatísticas -->
             <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div class="bg-white p-4 rounded-lg shadow border-l-4 border-gray-400">
-                    <div class="text-2xl font-bold text-gray-700">{{ estatisticas.total }}</div>
+                <div
+                    class="bg-white p-4 rounded-lg shadow border-l-4 border-gray-400"
+                >
+                    <div class="text-2xl font-bold text-gray-700">
+                        {{ estatisticas.total }}
+                    </div>
                     <div class="text-sm text-gray-600">Total</div>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-400">
-                    <div class="text-2xl font-bold text-yellow-700">{{ estatisticas.pendentes }}</div>
+                <div
+                    class="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-400"
+                >
+                    <div class="text-2xl font-bold text-yellow-700">
+                        {{ estatisticas.pendentes }}
+                    </div>
                     <div class="text-sm text-gray-600">Pendentes</div>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow border-l-4 border-purple-400">
-                    <div class="text-2xl font-bold text-purple-700">{{ estatisticas.em_execucao }}</div>
+                <div
+                    class="bg-white p-4 rounded-lg shadow border-l-4 border-purple-400"
+                >
+                    <div class="text-2xl font-bold text-purple-700">
+                        {{ estatisticas.em_execucao }}
+                    </div>
                     <div class="text-sm text-gray-600">Em Execução</div>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow border-l-4 border-green-400">
-                    <div class="text-2xl font-bold text-green-700">{{ estatisticas.concluidas }}</div>
+                <div
+                    class="bg-white p-4 rounded-lg shadow border-l-4 border-green-400"
+                >
+                    <div class="text-2xl font-bold text-green-700">
+                        {{ estatisticas.concluidas }}
+                    </div>
                     <div class="text-sm text-gray-600">Concluídas</div>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow border-l-4 border-red-400">
-                    <div class="text-2xl font-bold text-red-700">{{ estatisticas.urgentes }}</div>
+                <div
+                    class="bg-white p-4 rounded-lg shadow border-l-4 border-red-400"
+                >
+                    <div class="text-2xl font-bold text-red-700">
+                        {{ estatisticas.urgentes }}
+                    </div>
                     <div class="text-sm text-gray-600">Urgentes</div>
                 </div>
             </div>
 
             <!-- Filtros -->
-            <div class="grid gap-3 md:grid-cols-5 bg-white p-4 rounded-xl shadow">
+            <div
+                class="grid gap-3 md:grid-cols-5 bg-white p-4 rounded-xl shadow"
+            >
                 <Input
                     v-model="search"
                     placeholder="Pesquisar por OT, cliente, serviço..."
@@ -211,7 +263,7 @@ function formatPreco(preco: number) {
                         </SelectItem>
                     </SelectContent>
                 </Select>
-                
+
                 <Select v-model="cliente_id">
                     <SelectTrigger>
                         <SelectValue placeholder="Cliente" />
@@ -233,7 +285,9 @@ function formatPreco(preco: number) {
                         <SelectValue placeholder="Prioridade" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">Todas as prioridades</SelectItem>
+                        <SelectItem value="all"
+                            >Todas as prioridades</SelectItem
+                        >
                         <SelectItem
                             v-for="(label, value) in prioridades"
                             :key="value"
@@ -245,7 +299,10 @@ function formatPreco(preco: number) {
                 </Select>
 
                 <div class="flex justify-end">
-                    <Button @click="openCreate" class="bg-blue-600 hover:bg-blue-700">
+                    <Button
+                        @click="openCreate"
+                        class="bg-blue-600 hover:bg-blue-700"
+                    >
                         + Nova OT
                     </Button>
                 </div>
@@ -256,25 +313,39 @@ function formatPreco(preco: number) {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-slate-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Número
                             </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Cliente
                             </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Serviço
                             </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Prioridade
                             </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Estado
                             </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Início
                             </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase">
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase"
+                            >
                                 Fim
                             </th>
                             <th class="px-4 py-3"></th>
@@ -290,19 +361,29 @@ function formatPreco(preco: number) {
                                 {{ row.numero }}
                             </td>
                             <td class="px-4 py-3">
-                                <div class="font-medium text-gray-900">{{ row.cliente?.nome }}</div>
+                                <div class="font-medium text-gray-900">
+                                    {{ row.cliente?.nome }}
+                                </div>
                             </td>
                             <td class="px-4 py-3">
-                                <div class="font-medium text-gray-900">{{ row.servico?.nome }}</div>
-                                <div v-if="row.servico?.descricao" class="text-sm text-gray-500">
+                                <div class="font-medium text-gray-900">
+                                    {{ row.servico?.nome }}
+                                </div>
+                                <div
+                                    v-if="row.servico?.descricao"
+                                    class="text-sm text-gray-500"
+                                >
                                     {{ row.servico.descricao }}
                                 </div>
-                                <div v-if="row.servico?.preco" class="text-sm text-green-600">
+                                <div
+                                    v-if="row.servico?.preco"
+                                    class="text-sm text-green-600"
+                                >
                                     {{ formatPreco(row.servico.preco) }}
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <span 
+                                <span
                                     class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border"
                                     :class="getPrioridadeBadge(row.prioridade)"
                                 >
@@ -310,7 +391,7 @@ function formatPreco(preco: number) {
                                 </span>
                             </td>
                             <td class="px-4 py-3">
-                                <span 
+                                <span
                                     class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border"
                                     :class="getEstadoBadge(row.estado)"
                                 >
@@ -318,16 +399,24 @@ function formatPreco(preco: number) {
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-500">
-                                {{ row.data_inicio ?? "—" }}
+                                {{ formatDate(row.data_inicio) }}
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-500">
-                                {{ row.data_fim ?? "—" }}
+                                {{ formatDate(row.data_fim) }}
                             </td>
                             <td class="px-4 py-3 text-right space-x-2">
-                                <Button variant="outline" size="sm" @click="openEdit(row)">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="openEdit(row)"
+                                >
                                     Editar
                                 </Button>
-                                <Button variant="destructive" size="sm" @click="removeRow(row.id)">
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    @click="removeRow(row.id)"
+                                >
                                     Remover
                                 </Button>
                             </td>
@@ -347,7 +436,9 @@ function formatPreco(preco: number) {
                 <!-- Paginação -->
                 <div class="flex items-center justify-between p-4 border-t">
                     <div class="text-sm text-gray-500">
-                        Mostrando {{ props.ordens.from }} a {{ props.ordens.to }} de {{ props.ordens.total }} resultados
+                        Mostrando {{ props.ordens.from }} a
+                        {{ props.ordens.to }} de
+                        {{ props.ordens.total }} resultados
                     </div>
                     <div class="space-x-2">
                         <Button
@@ -388,18 +479,22 @@ function formatPreco(preco: number) {
             <DialogContent class="sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>{{
-                        isEditing ? "Editar Ordem de Trabalho" : "Nova Ordem de Trabalho"
+                        isEditing
+                            ? "Editar Ordem de Trabalho"
+                            : "Nova Ordem de Trabalho"
                     }}</DialogTitle>
                 </DialogHeader>
 
-                <!-- FORMULÁRIO SIMPLIFICADO SEM VEE-VALIDATE -->
+                <!-- FORMULÁRIO -->
                 <form @submit.prevent="submit" class="space-y-4">
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="space-y-2">
                             <label class="text-sm font-medium">Cliente *</label>
                             <Select v-model="form.cliente_id" required>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o cliente" />
+                                    <SelectValue
+                                        placeholder="Selecione o cliente"
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem
@@ -411,7 +506,10 @@ function formatPreco(preco: number) {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <div v-if="form.errors.cliente_id" class="text-sm text-red-600">
+                            <div
+                                v-if="form.errors.cliente_id"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.cliente_id }}
                             </div>
                         </div>
@@ -420,7 +518,9 @@ function formatPreco(preco: number) {
                             <label class="text-sm font-medium">Serviço *</label>
                             <Select v-model="form.servico_id" required>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o serviço" />
+                                    <SelectValue
+                                        placeholder="Selecione o serviço"
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem
@@ -429,53 +529,80 @@ function formatPreco(preco: number) {
                                         :value="servico.id"
                                     >
                                         {{ servico.nome }}
-                                        <span v-if="servico.preco" class="text-green-600 ml-2">
+                                        <span
+                                            v-if="servico.preco"
+                                            class="text-green-600 ml-2"
+                                        >
                                             {{ formatPreco(servico.preco) }}
                                         </span>
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <div v-if="form.errors.servico_id" class="text-sm text-red-600">
+                            <div
+                                v-if="form.errors.servico_id"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.servico_id }}
                             </div>
                         </div>
                     </div>
 
                     <div class="space-y-2">
-                        <label class="text-sm font-medium">Descrição do Trabalho *</label>
-                        <Textarea 
-                            v-model="form.descricao" 
+                        <label class="text-sm font-medium"
+                            >Descrição do Trabalho *</label
+                        >
+                        <Textarea
+                            v-model="form.descricao"
                             rows="3"
                             placeholder="Descreva em detalhe o trabalho a ser realizado..."
                             required
                         />
-                        <div v-if="form.errors.descricao" class="text-sm text-red-600">
+                        <div
+                            v-if="form.errors.descricao"
+                            class="text-sm text-red-600"
+                        >
                             {{ form.errors.descricao }}
                         </div>
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-3">
                         <div class="space-y-2">
-                            <label class="text-sm font-medium">Data Início</label>
-                            <Input type="date" v-model="form.data_inicio" />
-                            <div v-if="form.errors.data_inicio" class="text-sm text-red-600">
+                            <label class="text-sm font-medium"
+                                >Data Início</label
+                            >
+                            <Input type="date" v-model="dataInicioInput" />
+                            <div
+                                v-if="form.errors.data_inicio"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.data_inicio }}
                             </div>
                         </div>
-                        
+
                         <div class="space-y-2">
                             <label class="text-sm font-medium">Data Fim</label>
-                            <Input type="date" v-model="form.data_fim" />
-                            <div v-if="form.errors.data_fim" class="text-sm text-red-600">
+                            <Input
+                                type="date"
+                                v-model="dataFimInput"
+                                :min="dataInicioInput"
+                            />
+                            <div
+                                v-if="form.errors.data_fim"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.data_fim }}
                             </div>
                         </div>
-                        
+
                         <div class="space-y-2">
-                            <label class="text-sm font-medium">Prioridade *</label>
+                            <label class="text-sm font-medium"
+                                >Prioridade *</label
+                            >
                             <Select v-model="form.prioridade" required>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Selecione a prioridade" />
+                                    <SelectValue
+                                        placeholder="Selecione a prioridade"
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem
@@ -487,7 +614,10 @@ function formatPreco(preco: number) {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <div v-if="form.errors.prioridade" class="text-sm text-red-600">
+                            <div
+                                v-if="form.errors.prioridade"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.prioridade }}
                             </div>
                         </div>
@@ -498,7 +628,9 @@ function formatPreco(preco: number) {
                             <label class="text-sm font-medium">Estado *</label>
                             <Select v-model="form.estado" required>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o estado" />
+                                    <SelectValue
+                                        placeholder="Selecione o estado"
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem
@@ -510,7 +642,10 @@ function formatPreco(preco: number) {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <div v-if="form.errors.estado" class="text-sm text-red-600">
+                            <div
+                                v-if="form.errors.estado"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.estado }}
                             </div>
                         </div>
@@ -518,12 +653,15 @@ function formatPreco(preco: number) {
 
                     <div class="space-y-2">
                         <label class="text-sm font-medium">Observações</label>
-                        <Textarea 
-                            v-model="form.observacoes" 
+                        <Textarea
+                            v-model="form.observacoes"
                             rows="2"
                             placeholder="Observações adicionais..."
                         />
-                        <div v-if="form.errors.observacoes" class="text-sm text-red-600">
+                        <div
+                            v-if="form.errors.observacoes"
+                            class="text-sm text-red-600"
+                        >
                             {{ form.errors.observacoes }}
                         </div>
                     </div>
@@ -536,12 +674,14 @@ function formatPreco(preco: number) {
                         >
                             Cancelar
                         </Button>
-                        <Button 
-                            type="submit" 
+                        <Button
+                            type="submit"
                             :disabled="form.processing"
                             class="bg-blue-600 hover:bg-blue-700"
                         >
-                            {{ isEditing ? "Guardar Alterações" : "Criar Ordem" }}
+                            {{
+                                isEditing ? "Guardar Alterações" : "Criar Ordem"
+                            }}
                         </Button>
                     </div>
                 </form>

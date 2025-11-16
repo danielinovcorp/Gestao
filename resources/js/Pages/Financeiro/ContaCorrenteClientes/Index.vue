@@ -101,17 +101,19 @@ function onCreditoInput() {
 function submitCreate() {
     try {
         // Converter para string primeiro, depois para número
-        const debitoValue = createForm.debito ? 
-            parseFloat(String(createForm.debito).replace(',', '.')) : 0;
-        const creditoValue = createForm.credito ? 
-            parseFloat(String(createForm.credito).replace(',', '.')) : 0;
-        
-        const formData = { 
+        const debitoValue = createForm.debito
+            ? parseFloat(String(createForm.debito).replace(",", "."))
+            : 0;
+        const creditoValue = createForm.credito
+            ? parseFloat(String(createForm.credito).replace(",", "."))
+            : 0;
+
+        const formData = {
             ...createForm,
             debito: debitoValue,
-            credito: creditoValue
+            credito: creditoValue,
         };
-        
+
         // Garantir que apenas um campo seja preenchido
         if (formData.debito > 0 && formData.credito > 0) {
             formData.credito = 0;
@@ -119,39 +121,43 @@ function submitCreate() {
 
         // Validação final
         if (!formData.cliente_id) {
-            alert('Selecione um cliente');
+            alert("Selecione um cliente");
             return;
         }
 
         if (formData.debito <= 0 && formData.credito <= 0) {
-            alert('Preencha pelo menos um valor (débito ou crédito)');
+            alert("Preencha pelo menos um valor (débito ou crédito)");
             return;
         }
 
-        console.log('Enviando dados:', formData);
+        console.log("Enviando dados:", formData);
 
-        router.post(route("financeiro.conta-corrente-clientes.store"), formData, {
-            preserveScroll: true,
-            onSuccess: () => {
-                creating.value = false;
-                Object.assign(createForm, {
-                    cliente_id: "",
-                    data: new Date().toISOString().split('T')[0],
-                    descricao: "",
-                    documento_tipo: "",
-                    documento_numero: "",
-                    debito: "",
-                    credito: "",
-                });
+        router.post(
+            route("financeiro.conta-corrente-clientes.store"),
+            formData,
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    creating.value = false;
+                    Object.assign(createForm, {
+                        cliente_id: "",
+                        data: new Date().toISOString().split("T")[0],
+                        descricao: "",
+                        documento_tipo: "",
+                        documento_numero: "",
+                        debito: "",
+                        credito: "",
+                    });
+                },
+                onError: (errors) => {
+                    console.log("Erros:", errors);
+                    alert("Erro ao salvar: " + JSON.stringify(errors));
+                },
             },
-            onError: (errors) => {
-                console.log('Erros:', errors);
-                alert('Erro ao salvar: ' + JSON.stringify(errors));
-            }
-        });
+        );
     } catch (error) {
-        console.error('Erro no submit:', error);
-        alert('Erro ao processar os dados');
+        console.error("Erro no submit:", error);
+        alert("Erro ao processar os dados");
     }
 }
 
@@ -255,7 +261,7 @@ function getSaldoColor(saldo: number) {
             </div>
 
             <!-- Tabela -->
-            <div class="rounded-2xl border bg-white shadow-sm">
+            <div class="overflow-hidden rounded-xl border bg-white shadow-sm">
                 <div class="p-4 border-b">
                     <h3 class="text-lg font-medium text-gray-900">
                         Movimentos da Conta Corrente
@@ -265,56 +271,77 @@ function getSaldoColor(saldo: number) {
                     </h3>
                 </div>
 
-                <Table>
-                    <TableHeader>
-                        <TableRow class="hover:bg-transparent">
-                            <TableHead class="w-[120px]">Data</TableHead>
-                            <TableHead class="w-[200px]">Cliente</TableHead>
-                            <TableHead>Documento</TableHead>
-                            <TableHead>Descrição</TableHead>
-                            <TableHead class="text-right w-[120px]"
-                                >Débito</TableHead
+                <table class="min-w-full">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
                             >
-                            <TableHead class="text-right w-[120px]"
-                                >Crédito</TableHead
+                                Data
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
                             >
-                            <TableHead class="w-[80px]">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                                Cliente
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Documento
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left text-sm font-semibold text-slate-700"
+                            >
+                                Descrição
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Débito
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Crédito
+                            </th>
+                            <th
+                                class="px-4 py-2 text-right text-sm font-semibold text-slate-700"
+                            >
+                                Ações
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
                         <!-- Linha de criação -->
-                        <TableRow v-if="creating" class="bg-blue-50">
-                            <TableCell>
+                        <tr v-if="creating" class="bg-blue-50">
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.data"
                                     type="date"
                                     class="h-9"
                                 />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Select v-model="createForm.cliente_id">
-                                    <SelectTrigger class="h-9">
-                                        <SelectValue
-                                            placeholder="Selecione o cliente"
-                                        />
-                                    </SelectTrigger>
+                                    <SelectTrigger class="h-9"
+                                        ><SelectValue placeholder="Cliente"
+                                    /></SelectTrigger>
                                     <SelectContent class="max-h-72">
                                         <SelectItem
                                             v-for="c in clientes"
                                             :key="c.id"
                                             :value="String(c.id)"
+                                            >{{ c.nome }}</SelectItem
                                         >
-                                            {{ c.nome }}
-                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <div class="flex gap-2">
                                     <Select v-model="createForm.documento_tipo">
-                                        <SelectTrigger class="h-9 w-32">
-                                            <SelectValue placeholder="Tipo" />
-                                        </SelectTrigger>
+                                        <SelectTrigger class="h-9 w-32"
+                                            ><SelectValue placeholder="Tipo"
+                                        /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="fatura"
                                                 >Fatura</SelectItem
@@ -336,38 +363,34 @@ function getSaldoColor(saldo: number) {
                                         class="h-9 flex-1"
                                     />
                                 </div>
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.descricao"
-                                    placeholder="Descrição do movimento"
+                                    placeholder="Descrição"
                                     class="h-9"
                                 />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.debito"
                                     type="number"
                                     step="0.01"
-                                    min="0"
-                                    placeholder="0,00"
                                     class="h-9 text-right"
                                     @input="onDebitoInput"
                                 />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2">
                                 <Input
                                     v-model="createForm.credito"
                                     type="number"
                                     step="0.01"
-                                    min="0"
-                                    placeholder="0,00"
                                     class="h-9 text-right"
                                     @input="onCreditoInput"
                                 />
-                            </TableCell>
-                            <TableCell>
-                                <div class="flex gap-2">
+                            </td>
+                            <td class="px-4 py-2">
+                                <div class="flex gap-2 justify-end">
                                     <Button
                                         size="sm"
                                         @click="submitCreate"
@@ -383,25 +406,19 @@ function getSaldoColor(saldo: number) {
                                         size="sm"
                                         variant="outline"
                                         @click="cancelCreate"
-                                    >
-                                        <X class="h-4 w-4" />
-                                    </Button>
+                                        ><X class="h-4 w-4"
+                                    /></Button>
                                 </div>
-                            </TableCell>
-                        </TableRow>
+                            </td>
+                        </tr>
 
-                        <!-- Estado vazio -->
-                        <TableRow
-                            v-if="movimentos.data.length === 0 && !creating"
-                            class="hover:bg-transparent"
-                        >
-                            <TableCell
+                        <!-- Sem resultados -->
+                        <tr v-if="movimentos.data.length === 0 && !creating">
+                            <td
                                 colspan="7"
-                                class="py-12 text-center text-slate-500"
+                                class="px-4 py-10 text-center text-slate-500"
                             >
-                                <div
-                                    class="flex flex-col items-center justify-center"
-                                >
+                                <div class="flex flex-col items-center">
                                     <p
                                         class="text-lg font-medium text-gray-900 mb-2"
                                     >
@@ -410,8 +427,8 @@ function getSaldoColor(saldo: number) {
                                     <p class="text-gray-500 mb-4">
                                         {{
                                             cliente !== "all"
-                                                ? "Tente ajustar o filtro de cliente"
-                                                : "Comece adicionando o primeiro lançamento"
+                                                ? "Tente ajustar o filtro"
+                                                : "Adicione o primeiro lançamento"
                                         }}
                                     </p>
                                     <Button
@@ -422,59 +439,63 @@ function getSaldoColor(saldo: number) {
                                         Adicionar Lançamento
                                     </Button>
                                 </div>
-                            </TableCell>
-                        </TableRow>
+                            </td>
+                        </tr>
 
-                        <!-- Linhas de movimentos -->
-                        <TableRow
+                        <!-- Linhas normais -->
+                        <tr
                             v-for="movimento in movimentos.data"
                             :key="movimento.id"
-                            class="group hover:bg-gray-50"
+                            class="group hover:bg-slate-50"
                         >
-                            <TableCell class="font-medium">
+                            <td
+                                class="px-4 py-2 text-sm text-slate-600 font-medium"
+                            >
                                 {{ movimento.data }}
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2 text-sm text-slate-600">
                                 {{ movimento.cliente }}
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            <td class="px-4 py-2 text-sm">
                                 <div
                                     v-if="
                                         movimento.documento_tipo ||
                                         movimento.documento_numero
                                     "
                                 >
-                                    <Badge variant="outline" class="mr-2">
-                                        {{ movimento.documento_tipo || "Doc" }}
-                                    </Badge>
+                                    <Badge variant="outline" class="mr-2">{{
+                                        movimento.documento_tipo || "Doc"
+                                    }}</Badge>
                                     {{ movimento.documento_numero }}
                                 </div>
-                                <span v-else class="text-gray-400">-</span>
-                            </TableCell>
-                            <TableCell>
-                                {{ movimento.descricao || "-" }}
-                            </TableCell>
-                            <TableCell class="text-right font-medium">
+                                <span v-else class="text-slate-400">—</span>
+                            </td>
+                            <td class="px-4 py-2 text-sm text-slate-600">
+                                {{ movimento.descricao || "—" }}
+                            </td>
+                            <td
+                                class="px-4 py-2 text-sm text-right font-medium"
+                            >
                                 <span
                                     v-if="movimento.debito_raw > 0"
                                     class="text-red-600"
+                                    >{{ movimento.debito }} €</span
                                 >
-                                    {{ movimento.debito }} €
-                                </span>
-                                <span v-else class="text-gray-400">-</span>
-                            </TableCell>
-                            <TableCell class="text-right font-medium">
+                                <span v-else class="text-slate-400">—</span>
+                            </td>
+                            <td
+                                class="px-4 py-2 text-sm text-right font-medium"
+                            >
                                 <span
                                     v-if="movimento.credito_raw > 0"
                                     class="text-green-600"
+                                    >{{ movimento.credito }} €</span
                                 >
-                                    {{ movimento.credito }} €
-                                </span>
-                                <span v-else class="text-gray-400">-</span>
-                            </TableCell>
-                            <TableCell>
+                                <span v-else class="text-slate-400">—</span>
+                            </td>
+                            <td class="px-4 py-2">
                                 <div
-                                    class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                     <Button
                                         size="sm"
@@ -485,31 +506,34 @@ function getSaldoColor(saldo: number) {
                                         <Trash2 class="h-4 w-4" />
                                     </Button>
                                 </div>
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
 
                 <!-- Paginação -->
                 <div
-                    v-if="movimentos.links && movimentos.links.length > 3"
-                    class="p-4 border-t flex items-center justify-between"
+                    v-if="movimentos.links?.length > 3"
+                    class="p-4 border-t flex items-center justify-between text-sm"
                 >
-                    <p class="text-sm text-gray-700">
-                        Mostrando {{ movimentos.data.length }} registros
-                    </p>
+                    <div class="text-slate-600">
+                        Mostrando {{ movimentos.from }}–{{ movimentos.to }} de
+                        {{ movimentos.total }}
+                    </div>
                     <div class="flex gap-1">
                         <Button
                             v-for="link in movimentos.links"
                             :key="link.label"
-                            variant="outline"
-                            size="sm"
                             :disabled="!link.url"
-                            :class="{
-                                'bg-primary text-primary-foreground':
-                                    link.active,
-                            }"
                             @click="router.get(link.url)"
+                            :class="[
+                                link.active
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-white border hover:bg-slate-50',
+                                !link.url
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '',
+                            ]"
                             v-html="link.label"
                         />
                     </div>

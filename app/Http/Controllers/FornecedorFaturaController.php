@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use App\Services\DocService;
+use Illuminate\Support\Facades\Log;
 
 class FornecedorFaturaController extends Controller
 {
@@ -91,15 +93,13 @@ class FornecedorFaturaController extends Controller
 		]);
 	}
 
-	public function store(StoreFornecedorFaturaRequest $request)
+	public function store(StoreFornecedorFaturaRequest $request, DocService $docService)
 	{
 		$this->authorize('create', FornecedorFatura::class);
 
-		$paths = $this->handleUploads($request);
-
 		$fatura = null;
 
-		DB::transaction(function () use ($request, $paths, &$fatura) {
+		DB::transaction(function () use ($request, &$fatura, $docService) {
 			$fatura = FornecedorFatura::create([
 				'numero' => $request->numero,
 				'data_fatura' => $request->data_fatura,
@@ -107,18 +107,120 @@ class FornecedorFaturaController extends Controller
 				'fornecedor_id' => $request->fornecedor_id,
 				'encomenda_fornecedor_id' => $request->encomenda_fornecedor_id,
 				'valor_total' => $request->valor_total,
-				'documento_path' => $paths['documento'] ?? null,
-				'comprovativo_path' => $paths['comprovativo'] ?? null,
 				'estado' => $request->estado,
 			]);
 
-			if ($fatura->estado === 'paga') {
+			// GERA PDF AUTOMATICAMENTE
+			$pdfContent = $this->generatePdf($fatura);
+			$path = 'faturas/documentos/' . $fatura->id . '.pdf';
+			Storage::disk('private')->put($path, $pdfContent);
+			$fatura->update(['documento_path' => $path]);
+
+			// SALVA NO ARQUIVO DIGITAL
+			$docService->storeGenerated(
+				pdfContent: $pdfContent,
+				title: "Fatura Fornecedor #{$fatura->numero}",
+				documentableType: FornecedorFatura::class,
+				documentableId: $fatura->id,
+				userId: auth()->id(),
+				meta: [
+					'tags' => ['fatura', 'fornecedor', "fornecedor:{$fatura->fornecedor->nome}"],
+					'notes' => "Gerado em " . now()->format('d/m/Y H:i')
+				]
+			);
+
+			// ENVIA COMPROVATIVO SE ESTADO = PAGA E HÁ FICHEIRO
+			if ($fatura->estado === 'paga' && $request->hasFile('comprovativo')) {
+				$comprovativoPath = $request->file('comprovativo')->store('faturas/comprovativos', 'private');
+				$fatura->update(['comprovativo_path' => $comprovativoPath]);
+
 				$this->enviarComprovativo($fatura);
 			}
 		});
 
 		return redirect()->route('financeiro.faturas-fornecedor.index')
 			->with('success', 'Fatura criada com sucesso.');
+	}
+
+	public function update(UpdateFornecedorFaturaRequest $request, FornecedorFatura $fornecedor_fatura, DocService $docService)
+	{
+		$this->authorize('update', $fornecedor_fatura);
+
+		$estadoAnterior = $fornecedor_fatura->estado;
+
+		DB::transaction(function () use ($request, $fornecedor_fatura, $docService, $estadoAnterior) {
+			$fornecedor_fatura->update([
+				'numero' => $request->numero,
+				'data_fatura' => $request->data_fatura,
+				'data_vencimento' => $request->data_vencimento,
+				'fornecedor_id' => $request->fornecedor_id,
+				'encomenda_fornecedor_id' => $request->encomenda_fornecedor_id,
+				'valor_total' => $request->valor_total,
+				'estado' => $request->estado,
+			]);
+
+			// REGENERA PDF
+			$pdfContent = $this->generatePdf($fornecedor_fatura);
+			$path = 'faturas/documentos/' . $fornecedor_fatura->id . '.pdf';
+			Storage::disk('private')->put($path, $pdfContent);
+			$fornecedor_fatura->update(['documento_path' => $path]);
+
+			// ATUALIZA ARQUIVO DIGITAL
+			$docService->storeGenerated(
+				pdfContent: $pdfContent,
+				title: "Fatura Fornecedor #{$fornecedor_fatura->numero}",
+				documentableType: FornecedorFatura::class,
+				documentableId: $fornecedor_fatura->id,
+				userId: auth()->id(),
+				meta: [
+					'tags' => ['fatura', 'fornecedor'],
+					'notes' => "Atualizado em " . now()->format('d/m/Y H:i')
+				]
+			);
+
+			// ENVIA COMPROVATIVO SE MUDOU PARA PAGA E HÁ FICHEIRO
+			if ($estadoAnterior !== 'paga' && $fornecedor_fatura->estado === 'paga' && $request->hasFile('comprovativo')) {
+				$comprovativoPath = $request->file('comprovativo')->store('faturas/comprovativos', 'private');
+				$fornecedor_fatura->update(['comprovativo_path' => $comprovativoPath]);
+
+				$this->enviarComprovativo($fornecedor_fatura);
+			}
+		});
+
+		return back()->with('success', 'Fatura atualizada com sucesso.');
+	}
+
+	private function enviarComprovativo(FornecedorFatura $fatura): void
+	{
+		try {
+			\Log::info('=== INICIANDO ENVIO DE EMAIL ===');
+
+			$emailDestino = 'teste@mailtrap.io';
+
+			\Log::info('Destinatário: ' . $emailDestino);
+			\Log::info('Fatura ID: ' . $fatura->id);
+			\Log::info('Comprovativo path: ' . $fatura->comprovativo_path);
+
+			// Verifica se o arquivo existe
+			if (!$fatura->comprovativo_path || !\Illuminate\Support\Facades\Storage::disk('private')->exists($fatura->comprovativo_path)) {
+				\Log::warning('Comprovativo não encontrado');
+				return;
+			}
+
+			\Log::info('Enviando email...');
+
+			// Envia o email
+			\Illuminate\Support\Facades\Mail::to($emailDestino)
+				->send(new \App\Mail\ComprovativoPagamentoFornecedorMailable($fatura));
+
+			// Atualiza a fatura
+			$fatura->update(['comprovativo_enviado_em' => now()]);
+
+			\Log::info('=== EMAIL ENVIADO COM SUCESSO ===');
+		} catch (\Exception $e) {
+			\Log::error('=== ERRO NO ENVIO ===: ' . $e->getMessage());
+			\Log::error('Stack trace: ' . $e->getTraceAsString());
+		}
 	}
 
 	public function edit(FornecedorFatura $fornecedor_fatura)
@@ -146,35 +248,6 @@ class FornecedorFaturaController extends Controller
 		]);
 	}
 
-	public function update(UpdateFornecedorFaturaRequest $request, FornecedorFatura $fornecedor_fatura)
-	{
-		$this->authorize('update', $fornecedor_fatura);
-
-		$paths = $this->handleUploads($request, $fornecedor_fatura);
-
-		DB::transaction(function () use ($request, $fornecedor_fatura, $paths) {
-			$estadoAnterior = $fornecedor_fatura->estado;
-
-			$fornecedor_fatura->update([
-				'numero' => $request->numero,
-				'data_fatura' => $request->data_fatura,
-				'data_vencimento' => $request->data_vencimento,
-				'fornecedor_id' => $request->fornecedor_id,
-				'encomenda_fornecedor_id' => $request->encomenda_fornecedor_id,
-				'valor_total' => $request->valor_total,
-				'documento_path' => $paths['documento'] ?? $fornecedor_fatura->documento_path,
-				'comprovativo_path' => $paths['comprovativo'] ?? $fornecedor_fatura->comprovativo_path,
-				'estado' => $request->estado,
-			]);
-
-			if ($estadoAnterior !== 'paga' && $fornecedor_fatura->estado === 'paga') {
-				$this->enviarComprovativo($fornecedor_fatura);
-			}
-		});
-
-		return back()->with('success', 'Fatura atualizada com sucesso.');
-	}
-
 	public function destroy(FornecedorFatura $fornecedor_fatura)
 	{
 		$this->authorize('delete', $fornecedor_fatura);
@@ -199,13 +272,12 @@ class FornecedorFaturaController extends Controller
 		return $out;
 	}
 
-	private function enviarComprovativo(FornecedorFatura $fatura): void
+	private function generatePdf($fatura)
 	{
-		$emailDestino = $fatura->fornecedor?->email; // Ajusta conforme tua estrutura de contactos
-		if (!$emailDestino) return;
-
-		Mail::to($emailDestino)->queue(new ComprovativoPagamentoFornecedorMailable($fatura));
-
-		$fatura->forceFill(['comprovativo_enviado_em' => now()])->save();
+		$fatura->load('fornecedor', 'encomendaFornecedor');
+		$view = view('pdf.fatura-fornecedor', compact('fatura'))->render();
+		$dompdf = app('dompdf.wrapper');
+		$dompdf->loadHTML($view)->setPaper('a4', 'portrait');
+		return $dompdf->output();
 	}
 }

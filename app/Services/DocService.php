@@ -63,4 +63,35 @@ class DocService
 		Storage::disk($doc->disk)->delete($doc->path);
 		$doc->delete();
 	}
+
+	public function storeGenerated(
+		string $pdfContent,
+		string $title,
+		string $documentableType,
+		int $documentableId,
+		int $userId,
+		array $meta = []
+		): Doc {
+		$originalName = $title . '.pdf';
+		$path = 'documents/' . now()->format('Y/m') . '/' . Str::uuid() . '.pdf';
+
+		// Salva no storage privado
+		Storage::disk('private')->put($path, $pdfContent);
+
+		return Doc::create([
+			'documentable_type' => $documentableType,
+			'documentable_id' => $documentableId,
+			'uploaded_by' => $userId,
+			'title' => $title,
+			'original_name' => $originalName,
+			'ext' => 'pdf',
+			'mime' => 'application/pdf',
+			'size' => strlen($pdfContent),
+			'disk' => 'private',
+			'path' => $path,
+			'sha256' => hash('sha256', $pdfContent),
+			'tags' => $meta['tags'] ?? [],
+			'notes' => $meta['notes'] ?? "Gerado automaticamente em " . now()->format('d/m/Y H:i'),
+		]);
+	}
 }
