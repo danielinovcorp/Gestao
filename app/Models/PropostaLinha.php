@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\BelongsToTenant;
 
 class PropostaLinha extends Model
 {
+	use BelongsToTenant;
     protected $fillable = [
         'proposta_id',
         'artigo_id',

@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Casts\AsArrayObject;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use App\Models\Concerns\BelongsToTenant;
 
 class Doc extends Model
 {
-	use SoftDeletes;
+	use SoftDeletes, BelongsToTenant;
 
 	protected $fillable = [
 		'documentable_type',

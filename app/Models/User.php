@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
+use Stancl\Tenancy\Database\Models\Tenant;
 
 class User extends Authenticatable
 {
@@ -58,5 +59,17 @@ class User extends Authenticatable
 	public function isActive(): bool
 	{
 		return $this->status === 'active';
+	}
+
+	public function tenants()
+	{
+		return $this->belongsToMany(Tenant::class, 'tenant_user', 'user_id', 'tenant_id')
+			->withPivot('role')
+			->withTimestamps();
+	}
+
+	public function currentTenant()
+	{
+		return $this->belongsTo(Tenant::class, 'last_tenant_id', 'id');
 	}
 }

@@ -29,6 +29,8 @@ use App\Http\Controllers\Config\ArtigosController;
 use App\Http\Controllers\Api\EntidadeController as ApiEntidadeController;
 use App\Http\Controllers\Acessos\UtilizadoresController;
 use App\Http\Controllers\Acessos\PermissoesController;
+use Stancl\Tenancy\Database\Models\Tenant;
+use App\Http\Controllers\TenantController;
 
 Route::prefix('api/vies')->group(function () {
 	Route::get('/countries', function () {
@@ -308,7 +310,6 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 			->middleware('can:access.roles.delete')->name('roles.destroy');
 	});
 
-
 	// ✅ Encomendas
 	Route::prefix('encomendas')->name('encomendas.')->group(function () {
 		// CLIENTES
@@ -411,6 +412,22 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
 		// Opcional: export CSV
 		// Route::get('/export', [LogsController::class, 'export'])->name('export');
 	});
+
+
+	// TENANTS — Gestão de Empresas (Workspaces)
+	Route::prefix('tenants')->name('tenants.')->group(function () {
+		Route::get('/', [TenantController::class, 'index'])->name('index');           // opcional
+		Route::get('/create', [TenantController::class, 'create'])->name('create');
+		Route::post('/', [TenantController::class, 'store'])->name('store');
+		Route::delete('/{tenant}', [TenantController::class, 'destroy'])->name('destroy');
+	});
+
+	// Troca de empresa (pode ficar fora do prefix se quiseres)
+	Route::post('/tenant/switch/{tenant}', [TenantController::class, 'switch'])
+		->name('tenant.switch');
+
+	Route::get('/onboarding', [TenantController::class, 'onboarding'])
+		->name('tenants.onboarding');
 });
 
 // privado (requer login)

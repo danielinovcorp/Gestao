@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\BelongsToTenant;
 
 class EncomendaClienteLinha extends Model
 {
+	use BelongsToTenant;
+	
     protected $table = 'encomenda_cliente_linhas';
 
     protected $fillable = [

@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Middleware\InitializeTenancyBySession; // ← SEU MIDDLEWARE
 
 return Application::configure(basePath: dirname(__DIR__))
 	->withProviders([
@@ -19,15 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
 		$middleware->web(append: [
 			\App\Http\Middleware\HandleInertiaRequests::class,
 			\Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+			InitializeTenancyBySession::class, // ← AGORA FUNCIONA
 		]);
 		$middleware->api();
 
 		// 🔹 TUAS ALIASES
 		$middleware->alias([
-			// teu middleware
 			'active' => \App\Http\Middleware\EnsureUserIsActive::class,
-
-			// Spatie Permission
 			'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class,
 			'permission' => \Spatie\Permission\Middlewares\PermissionMiddleware::class,
 			'role_or_permission' => \Spatie\Permission\Middlewares\RoleOrPermissionMiddleware::class,

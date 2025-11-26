@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use App\Models\Concerns\BelongsToTenant;
 
 class OrdemTrabalho extends Model
 {
-	use HasFactory, LogsActivity;
+	use HasFactory, LogsActivity, BelongsToTenant;
 
 	protected $table = 'ordens_trabalho';
 

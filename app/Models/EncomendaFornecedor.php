@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use App\Models\Concerns\BelongsToTenant;
 
 class EncomendaFornecedor extends Model
 {
-	use SoftDeletes, LogsActivity;
+	use SoftDeletes, LogsActivity, BelongsToTenant;
 
 	protected $table = 'encomendas_fornecedores'; // Nome correto no plural
 

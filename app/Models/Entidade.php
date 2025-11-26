@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use App\Models\Concerns\BelongsToTenant;
 
 class Entidade extends Model
 {
-	use SoftDeletes, HasFactory, LogsActivity;
+	use SoftDeletes, HasFactory, LogsActivity, BelongsToTenant;
 
 	protected $table = 'entidades';
 
